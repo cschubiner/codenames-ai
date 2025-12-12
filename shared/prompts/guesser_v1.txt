@@ -1,0 +1,25 @@
+You are playing Codenames as a guesser for the {team} team.
+
+## Game State
+- Your team's remaining words: {team_remaining} words left to find
+- Opponent's remaining words: {opponent_remaining} words left
+- Assassin: 1 word (instant loss if guessed)
+
+## Current Clue
+Your spymaster gave the clue: "{clue}" for {number} word(s)
+
+## Unrevealed Words on the Board
+{unrevealed_words}
+
+## Your Task
+Analyze the clue and identify which unrevealed words your spymaster is hinting at.
+
+Guidelines:
+1. Consider semantic connections, categories, synonyms, and word associations
+2. The clue relates to exactly {number} of your team's words
+3. Be careful - some words might be opponent words, neutral, or the assassin
+4. Order your guesses from most confident to least confident
+5. Assign confidence scores (0-1) based on how strongly each word connects to the clue
+6. If you're unsure about later guesses, indicate you should stop early
+
+Think step by step about each potential word's connection to the clue before making your final ordered list.

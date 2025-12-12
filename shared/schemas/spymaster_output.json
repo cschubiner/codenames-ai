@@ -1,0 +1,47 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "SpymasterOutput",
+  "description": "Structured output from the spymaster LLM for candidate clue generation",
+  "type": "object",
+  "required": ["candidates"],
+  "additionalProperties": false,
+  "properties": {
+    "candidates": {
+      "type": "array",
+      "description": "List of candidate clues",
+      "items": {
+        "type": "object",
+        "required": ["clue", "number", "intended_targets", "reasoning"],
+        "additionalProperties": false,
+        "properties": {
+          "clue": {
+            "type": "string",
+            "description": "The one-word clue to give",
+            "pattern": "^[A-Za-z]+$"
+          },
+          "number": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9,
+            "description": "Number of words this clue relates to"
+          },
+          "intended_targets": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The specific board words this clue is meant to hint at"
+          },
+          "reasoning": {
+            "type": "string",
+            "description": "Explanation of why this clue connects the targets"
+          },
+          "risk_assessment": {
+            "type": "string",
+            "description": "Assessment of potential confusion with opponent/assassin words"
+          }
+        }
+      }
+    }
+  }
+}

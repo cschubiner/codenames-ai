@@ -1,0 +1,562 @@
+/* Codenames AI - Styles */
+
+:root {
+  --red: #d32f2f;
+  --red-light: #ef5350;
+  --blue: #1976d2;
+  --blue-light: #42a5f5;
+  --neutral: #9e9e9e;
+  --neutral-light: #bdbdbd;
+  --assassin: #212121;
+  --bg: #fafafa;
+  --card-bg: #fff;
+  --text: #212121;
+  --text-light: #757575;
+  --border: #e0e0e0;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+}
+
+#app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Layout */
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 1rem;
+}
+
+.header {
+  background: var(--text);
+  color: white;
+  padding: 1rem;
+  text-align: center;
+}
+
+.header h1 {
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+/* Home Screen */
+.home {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 80vh;
+  gap: 2rem;
+  padding: 2rem;
+}
+
+.home h1 {
+  font-size: 3rem;
+  color: var(--text);
+}
+
+.home-buttons {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+/* Buttons */
+.btn {
+  padding: 1rem 2rem;
+  font-size: 1.1rem;
+  font-weight: 600;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: transform 0.1s, box-shadow 0.1s;
+}
+
+.btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+.btn:active {
+  transform: translateY(0);
+}
+
+.btn-red {
+  background: var(--red);
+  color: white;
+}
+
+.btn-blue {
+  background: var(--blue);
+  color: white;
+}
+
+.btn-neutral {
+  background: var(--neutral);
+  color: white;
+}
+
+.btn-outline {
+  background: white;
+  border: 2px solid var(--border);
+  color: var(--text);
+}
+
+.btn-small {
+  padding: 0.5rem 1rem;
+  font-size: 0.9rem;
+}
+
+/* Forms */
+.form-group {
+  margin-bottom: 1rem;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+}
+
+.form-group input,
+.form-group select {
+  width: 100%;
+  padding: 0.75rem;
+  font-size: 1rem;
+  border: 2px solid var(--border);
+  border-radius: 8px;
+}
+
+.form-group input:focus,
+.form-group select:focus {
+  outline: none;
+  border-color: var(--blue);
+}
+
+/* Room Code Display */
+.room-code {
+  font-size: 3rem;
+  font-weight: 700;
+  letter-spacing: 0.5rem;
+  font-family: monospace;
+  background: var(--text);
+  color: white;
+  padding: 1rem 2rem;
+  border-radius: 8px;
+}
+
+/* Game Board */
+.board {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 0.5rem;
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 1rem;
+}
+
+.card {
+  aspect-ratio: 1.5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-align: center;
+  text-transform: uppercase;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: transform 0.1s, box-shadow 0.1s;
+  background: var(--card-bg);
+  border: 2px solid var(--border);
+  word-break: break-word;
+}
+
+.card:hover:not(.revealed):not(.disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+.card.revealed {
+  cursor: default;
+  color: white;
+}
+
+.card.revealed.red {
+  background: var(--red);
+  border-color: var(--red);
+}
+
+.card.revealed.blue {
+  background: var(--blue);
+  border-color: var(--blue);
+}
+
+.card.revealed.neutral {
+  background: var(--neutral);
+  border-color: var(--neutral);
+}
+
+.card.revealed.assassin {
+  background: var(--assassin);
+  border-color: var(--assassin);
+}
+
+/* Spymaster view - show colors before reveal */
+.card.spymaster-view.red {
+  border-color: var(--red);
+  box-shadow: inset 0 0 0 3px var(--red-light);
+}
+
+.card.spymaster-view.blue {
+  border-color: var(--blue);
+  box-shadow: inset 0 0 0 3px var(--blue-light);
+}
+
+.card.spymaster-view.neutral {
+  border-color: var(--neutral);
+  box-shadow: inset 0 0 0 3px var(--neutral-light);
+}
+
+.card.spymaster-view.assassin {
+  border-color: var(--assassin);
+  box-shadow: inset 0 0 0 3px var(--assassin);
+  color: var(--red);
+}
+
+.card.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Game Info */
+.game-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.team-score {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.team-score.red {
+  color: var(--red);
+}
+
+.team-score.blue {
+  color: var(--blue);
+}
+
+.current-turn {
+  text-align: center;
+}
+
+.turn-indicator {
+  font-size: 1.2rem;
+  font-weight: 600;
+  padding: 0.5rem 1rem;
+  border-radius: 20px;
+}
+
+.turn-indicator.red {
+  background: var(--red-light);
+  color: white;
+}
+
+.turn-indicator.blue {
+  background: var(--blue-light);
+  color: white;
+}
+
+/* Clue Display */
+.clue-display {
+  text-align: center;
+  padding: 1rem;
+  background: var(--card-bg);
+  border-radius: 8px;
+  margin: 1rem auto;
+  max-width: 400px;
+}
+
+.clue-word {
+  font-size: 2rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.clue-number {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--text-light);
+}
+
+/* Clue Input */
+.clue-input {
+  display: flex;
+  gap: 0.5rem;
+  max-width: 400px;
+  margin: 1rem auto;
+}
+
+.clue-input input {
+  flex: 1;
+  padding: 0.75rem;
+  font-size: 1rem;
+  border: 2px solid var(--border);
+  border-radius: 8px;
+}
+
+.clue-input input[type="number"] {
+  width: 80px;
+  flex: none;
+}
+
+/* Setup Screen */
+.setup {
+  max-width: 600px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+.setup h2 {
+  margin-bottom: 1.5rem;
+}
+
+.role-config {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.role-item {
+  padding: 1rem;
+  background: var(--card-bg);
+  border-radius: 8px;
+  border: 2px solid var(--border);
+}
+
+.role-item.red {
+  border-color: var(--red-light);
+}
+
+.role-item.blue {
+  border-color: var(--blue-light);
+}
+
+.role-item h4 {
+  margin-bottom: 0.5rem;
+}
+
+/* Join Screen */
+.join-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin: 2rem 0;
+}
+
+.join-card {
+  padding: 1.5rem;
+  background: var(--card-bg);
+  border-radius: 8px;
+  border: 3px solid;
+  text-align: center;
+  cursor: pointer;
+  transition: transform 0.1s;
+}
+
+.join-card:hover {
+  transform: translateY(-4px);
+}
+
+.join-card.red {
+  border-color: var(--red);
+}
+
+.join-card.blue {
+  border-color: var(--blue);
+}
+
+.join-card h3 {
+  margin-bottom: 1rem;
+}
+
+.join-card.taken {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.join-card.taken:hover {
+  transform: none;
+}
+
+/* History */
+.history {
+  max-width: 800px;
+  margin: 2rem auto;
+  padding: 1rem;
+}
+
+.history h3 {
+  margin-bottom: 1rem;
+}
+
+.history-item {
+  padding: 0.5rem;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.history-item .team-badge {
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: white;
+}
+
+.history-item .team-badge.red {
+  background: var(--red);
+}
+
+.history-item .team-badge.blue {
+  background: var(--blue);
+}
+
+/* Actions */
+.actions {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  margin: 1rem 0;
+}
+
+/* Winner Overlay */
+.winner-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0,0,0,0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.winner-modal {
+  background: white;
+  padding: 3rem;
+  border-radius: 16px;
+  text-align: center;
+}
+
+.winner-modal h2 {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+}
+
+.winner-modal.red h2 {
+  color: var(--red);
+}
+
+.winner-modal.blue h2 {
+  color: var(--blue);
+}
+
+/* Host View */
+.host-view {
+  padding: 2rem;
+}
+
+.host-view .board {
+  max-width: 1000px;
+}
+
+.host-view .card {
+  font-size: 1.2rem;
+  aspect-ratio: 1.3;
+}
+
+/* Mobile */
+@media (max-width: 600px) {
+  .board {
+    gap: 0.25rem;
+  }
+
+  .card {
+    font-size: 0.7rem;
+    padding: 0.25rem;
+  }
+
+  .home h1 {
+    font-size: 2rem;
+  }
+
+  .room-code {
+    font-size: 2rem;
+  }
+
+  .role-config,
+  .join-options {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Loading */
+.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+  font-size: 1.2rem;
+  color: var(--text-light);
+}
+
+/* Error */
+.error {
+  background: #ffebee;
+  color: var(--red);
+  padding: 1rem;
+  border-radius: 8px;
+  margin: 1rem 0;
+  text-align: center;
+}
+
+/* AI Thinking Animation */
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}

@@ -1,0 +1,83 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "AgentConfig",
+  "description": "Configuration for a Codenames AI agent",
+  "type": "object",
+  "required": ["name", "spymaster", "guesser", "selection"],
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Unique identifier for this agent configuration"
+    },
+    "spymaster": {
+      "type": "object",
+      "required": ["model", "prompt_id", "temperature", "candidates_per_turn"],
+      "properties": {
+        "model": {
+          "type": "string",
+          "description": "OpenAI model to use for spymaster",
+          "examples": ["gpt-4o", "gpt-4o-mini", "o1-mini"]
+        },
+        "prompt_id": {
+          "type": "string",
+          "description": "ID of the prompt template to use"
+        },
+        "temperature": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 2,
+          "description": "Sampling temperature for clue generation"
+        },
+        "candidates_per_turn": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 32,
+          "description": "Number of candidate clues to generate per turn (K)"
+        }
+      }
+    },
+    "guesser": {
+      "type": "object",
+      "required": ["model", "prompt_id", "temperature"],
+      "properties": {
+        "model": {
+          "type": "string",
+          "description": "OpenAI model to use for guesser"
+        },
+        "prompt_id": {
+          "type": "string",
+          "description": "ID of the prompt template to use"
+        },
+        "temperature": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 2,
+          "description": "Sampling temperature for guess generation"
+        }
+      }
+    },
+    "selection": {
+      "type": "object",
+      "required": ["eval_samples_per_candidate", "eval_temperature", "aggregation"],
+      "properties": {
+        "eval_samples_per_candidate": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16,
+          "description": "Number of guesser rollouts per candidate clue (G)"
+        },
+        "eval_temperature": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 2,
+          "description": "Temperature for evaluation rollouts"
+        },
+        "aggregation": {
+          "type": "string",
+          "enum": ["mean", "mean_minus_std", "percentile_25", "cvar_25", "min"],
+          "description": "How to aggregate rollout scores"
+        }
+      }
+    }
+  }
+}

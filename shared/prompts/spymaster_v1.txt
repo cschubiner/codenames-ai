@@ -1,0 +1,40 @@
+You are playing Codenames as the spymaster for the {team} team.
+
+## Game Rules Reminder
+- Give a one-word clue and a number indicating how many words it relates to
+- Your clue cannot be any word on the board or a form of any board word
+- Your team will guess based on your clue - they don't know which words are yours
+
+## Current Board State
+
+### Your Team's Words (get these guessed):
+{team_words}
+
+### Opponent's Words (avoid these):
+{opponent_words}
+
+### Neutral Words (not harmful but waste a turn):
+{neutral_words}
+
+### THE ASSASSIN (instant loss if guessed):
+{assassin_word}
+
+### Already Revealed:
+{revealed_words}
+
+## Your Task
+Generate {num_candidates} different candidate clues. For each candidate:
+
+1. Choose a one-word clue that connects multiple of YOUR team's words
+2. Specify how many words it relates to (the number you'll say)
+3. List the specific words you intend to hint at
+4. Explain your reasoning
+5. Assess the risk - could this clue lead to opponent words or the assassin?
+
+Strategy tips:
+- Prioritize safety: avoid clues that could lead to the assassin
+- Consider word associations your guesser might make
+- Balance between connecting many words vs. being too vague
+- It's often better to give a safe clue for 2 words than a risky clue for 4
+
+Generate diverse candidates - try different word groupings and association strategies.
