@@ -41,6 +41,9 @@ function Home({ onHostGame, onJoinGame }) {
 
 // Available AI models
 const AI_MODELS = [
+  { id: 'gpt-5.1', name: 'GPT-5.1', description: 'Latest flagship' },
+  { id: 'gpt-5.2', name: 'GPT-5.2', description: 'Latest flagship v2' },
+  { id: 'gpt-5-mini', name: 'GPT-5 Mini', description: 'Fast GPT-5' },
   { id: 'gpt-4o', name: 'GPT-4o', description: 'Best quality' },
   { id: 'gpt-4o-mini', name: 'GPT-4o Mini', description: 'Fast & efficient' },
   { id: 'gpt-4.1-nano', name: 'GPT-4.1 Nano', description: 'Ultra fast' },
@@ -223,8 +226,10 @@ function Join({ onJoin, onBack }) {
 
   const isRoleAI = (team, role) => {
     if (!gameState) return false;
+    // Construct key like 'redSpymaster' or 'blueGuesser'
     const key = `${team}${role.charAt(0).toUpperCase()}${role.slice(1)}`;
-    return gameState.roleConfig[key] === 'ai';
+    const isAI = gameState.roleConfig?.[key] === 'ai';
+    return isAI;
   };
 
   return html`
@@ -245,7 +250,12 @@ function Join({ onJoin, onBack }) {
         />
       </div>
 
-      <button class="btn btn-neutral" onClick=${lookupGame} disabled=${roomCode.length !== 4}>
+      <button
+        class="btn ${roomCode.length === 4 ? 'btn-blue' : 'btn-neutral'}"
+        onClick=${lookupGame}
+        disabled=${roomCode.length !== 4}
+        style=${roomCode.length === 4 ? 'box-shadow: 0 4px 15px rgba(25, 118, 210, 0.4);' : 'opacity: 0.5;'}
+      >
         Look Up Game
       </button>
 
@@ -270,20 +280,36 @@ function Join({ onJoin, onBack }) {
               <div class="join-card ${team}">
                 <h3 style="color: var(--${team});">${team.toUpperCase()} TEAM</h3>
                 <div style="display: flex; flex-direction: column; gap: 0.5rem;">
-                  <button
-                    class="btn btn-${team} btn-small ${isRoleTaken(team, 'spymaster') || isRoleAI(team, 'spymaster') ? 'disabled' : ''}"
-                    onClick=${() => handleJoin(team, 'spymaster')}
-                    disabled=${isRoleTaken(team, 'spymaster') || isRoleAI(team, 'spymaster')}
-                  >
-                    Spymaster ${isRoleAI(team, 'spymaster') ? '(AI)' : isRoleTaken(team, 'spymaster') ? '(Taken)' : ''}
-                  </button>
-                  <button
-                    class="btn btn-${team} btn-small ${isRoleTaken(team, 'guesser') || isRoleAI(team, 'guesser') ? 'disabled' : ''}"
-                    onClick=${() => handleJoin(team, 'guesser')}
-                    disabled=${isRoleTaken(team, 'guesser') || isRoleAI(team, 'guesser')}
-                  >
-                    Guesser ${isRoleAI(team, 'guesser') ? '(AI)' : isRoleTaken(team, 'guesser') ? '(Taken)' : ''}
-                  </button>
+                  ${(() => {
+                    const smIsAI = isRoleAI(team, 'spymaster');
+                    const smIsTaken = isRoleTaken(team, 'spymaster');
+                    const smAvailable = !smIsAI && !smIsTaken;
+                    return html`
+                      <button
+                        class="btn btn-${team} btn-small ${!smAvailable ? 'disabled' : ''}"
+                        onClick=${() => handleJoin(team, 'spymaster')}
+                        disabled=${!smAvailable}
+                        style=${smAvailable ? 'box-shadow: 0 0 10px var(--' + team + ');' : 'opacity: 0.5;'}
+                      >
+                        Spymaster ${smIsAI ? '🤖 AI' : smIsTaken ? '(Taken)' : '✓ Open'}
+                      </button>
+                    `;
+                  })()}
+                  ${(() => {
+                    const gIsAI = isRoleAI(team, 'guesser');
+                    const gIsTaken = isRoleTaken(team, 'guesser');
+                    const gAvailable = !gIsAI && !gIsTaken;
+                    return html`
+                      <button
+                        class="btn btn-${team} btn-small ${!gAvailable ? 'disabled' : ''}"
+                        onClick=${() => handleJoin(team, 'guesser')}
+                        disabled=${!gAvailable}
+                        style=${gAvailable ? 'box-shadow: 0 0 10px var(--' + team + ');' : 'opacity: 0.5;'}
+                      >
+                        Guesser ${gIsAI ? '🤖 AI' : gIsTaken ? '(Taken)' : '✓ Open'}
+                      </button>
+                    `;
+                  })()}
                 </div>
               </div>
             `)}
