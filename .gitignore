@@ -1,0 +1,10 @@
+node_modules/
+.venv/
+__pycache__/
+*.log
+.DS_Store
+.dev.vars
+.wrangler/
+dist/
+codenames_ai_online/worker/.dev.vars
+codenames_ai_online/worker/.wrangler/
