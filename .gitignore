@@ -1,0 +1,20 @@
+# Node
+node_modules/
+dist/
+.wrangler/
+
+# OS
+.DS_Store
+
+# Local
+.env
+.dev.vars
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Generated benchmark artifacts
+results/
+data/*.jsonl

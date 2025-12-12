@@ -1,0 +1,29 @@
+{
+  "name": "B_smoke_spymaster_v2_guesser_v2",
+  "spymaster": {
+    "provider": "openai_responses",
+    "model": "gpt-4o",
+    "prompt_id": "spymaster_v2",
+    "temperature": 0.7,
+    "top_p": 1.0,
+    "max_output_tokens": 256,
+    "candidates_per_turn": 2,
+    "generation_mode": "k_calls"
+  },
+  "guesser": {
+    "provider": "openai_responses",
+    "model": "gpt-4o-mini",
+    "prompt_id": "guesser_v2",
+    "temperature": 0.0,
+    "top_p": 1.0,
+    "max_output_tokens": 256
+  },
+  "selection": {
+    "eval_samples_per_candidate": 1,
+    "eval_temperature": 0.0,
+    "eval_top_p": 1.0,
+    "aggregate": "p10",
+    "lambda_std": 0.7
+  }
+}
+

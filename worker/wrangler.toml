@@ -1,0 +1,15 @@
+name = "codenames-ai-online"
+main = "src/index.ts"
+compatibility_date = "2025-12-01"
+
+# Useful if you import JSON modules and want Node-ish APIs.
+compatibility_flags = ["nodejs_compat"]
+
+[[durable_objects.bindings]]
+name = "ROOM"
+class_name = "CodenamesRoom"
+
+# Durable Object migrations: create the class (SQLite-backed DO)
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["CodenamesRoom"]

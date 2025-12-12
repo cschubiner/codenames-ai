@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Codenames: Humans vs AI Spymasters</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="top">
+    <div class="top-inner">
+      <div>
+        <div class="title">Codenames AI</div>
+        <div class="subtitle">Jackbox‑style play with humans, AI, or any mix.</div>
+      </div>
+      <div class="top-badges">
+        <div class="badge red">RED</div>
+        <div class="badge blue">BLUE</div>
+        <div class="badge neutral">NEUTRAL</div>
+        <div class="badge assassin">ASSASSIN</div>
+      </div>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section id="hero" class="hero">
+      <h1>Play Codenames with AI spymasters</h1>
+      <p>Create a room, share links, and play on phones while the board sits on a big screen.</p>
+    </section>
+    <section id="configWarning" class="card warning hidden"></section>
+
+    <section id="createView" class="card">
+      <div class="card-head">
+        <h2>Create a room</h2>
+        <div class="small">Pick presets for each team’s AI (you can add human spymasters later).</div>
+      </div>
+      <div class="form-grid">
+        <div class="row">
+          <label>Red AI preset</label>
+          <select id="redPreset"></select>
+        </div>
+        <div class="row">
+          <label>Blue AI preset</label>
+          <select id="bluePreset"></select>
+        </div>
+      </div>
+      <div class="actions">
+        <button id="createRoomBtn" class="primary">Create room</button>
+        <button id="showJoinBtn" class="secondary ghost">Join existing room</button>
+      </div>
+
+      <div id="createResult" class="hidden">
+        <h3>Room created</h3>
+        <div class="small">Share these links:</div>
+        <div class="links">
+          <a id="redLink" class="link-pill red" href="#" target="_blank" rel="noreferrer">Red team link</a>
+          <a id="blueLink" class="link-pill blue" href="#" target="_blank" rel="noreferrer">Blue team link</a>
+          <a id="specLink" class="link-pill neutral" href="#" target="_blank" rel="noreferrer">Spectator / TV link</a>
+        </div>
+      </div>
+    </section>
+
+    <section id="joinView" class="card hidden">
+      <div class="card-head">
+        <h2>Join room</h2>
+        <div class="small">Paste a room code or open a shared link.</div>
+      </div>
+      <div class="row">
+        <label>Room</label>
+        <input id="roomIdInput" placeholder="room id" />
+      </div>
+
+      <div id="continueBox" class="hidden">
+        <div class="small">Saved player found for this room:</div>
+        <div id="continueLabel" class="mono"></div>
+        <button id="continueBtn">Continue</button>
+        <button id="forgetBtn" class="secondary">Forget saved player</button>
+        <hr/>
+      </div>
+
+      <div class="row">
+        <label>Name</label>
+        <input id="nameInput" placeholder="Your name" maxlength="32" />
+      </div>
+      <div class="row">
+        <label>Team</label>
+        <select id="teamSelect">
+          <option value="RED">RED</option>
+          <option value="BLUE">BLUE</option>
+          <option value="SPECTATOR">SPECTATOR</option>
+        </select>
+      </div>
+      <div class="row">
+        <label>Role</label>
+        <select id="roleSelect">
+          <option value="GUESSER">GUESSER</option>
+          <option value="SPYMASTER">SPYMASTER</option>
+          <option value="CONTROLLER">CONTROLLER</option>
+          <option value="SPECTATOR">SPECTATOR</option>
+        </select>
+      </div>
+      <div class="actions">
+        <button id="joinBtn" class="primary">Join</button>
+        <button id="backToCreateBtn" class="secondary ghost">Back</button>
+      </div>
+    </section>
+
+    <section id="gameView" class="hidden">
+      <div class="card game-head">
+        <div class="row between">
+          <div>
+            <div class="small">Room</div>
+            <div id="roomLabel" class="mono"></div>
+          </div>
+          <div>
+            <div class="small">You</div>
+            <div id="youLabel" class="mono"></div>
+          </div>
+          <div class="right">
+            <button id="resetBtn" class="secondary">New game</button>
+          </div>
+        </div>
+
+        <div class="row between">
+          <div>
+            <div class="small">Turn</div>
+            <div id="turnLabel" class="pill"></div>
+          </div>
+          <div>
+            <div class="small">Clue</div>
+            <div id="clueLabel" class="mono"></div>
+          </div>
+          <div>
+            <div class="small">Guesses</div>
+            <div id="guessCountLabel" class="mono"></div>
+          </div>
+        </div>
+
+        <div id="statusBanner" class="banner hidden"></div>
+
+        <div id="humanClueBox" class="humanclue hidden">
+          <div class="small">Human spymaster — enter a clue</div>
+          <div class="inline">
+            <input id="humanClueInput" placeholder="one-word clue" />
+            <input id="humanClueNumber" class="num" type="number" min="1" max="9" value="1" />
+            <button id="humanClueSubmit">Submit clue</button>
+          </div>
+        </div>
+
+        <div class="controls">
+          <button id="stopBtn">Stop</button>
+          <button id="aiSuggestBtn" class="secondary">AI suggest guesses</button>
+          <button id="aiPlayBtn" class="secondary">AI play next guess</button>
+        </div>
+
+        <div id="aiBox" class="ai hidden">
+          <div class="small">AI suggestions</div>
+          <div id="aiList"></div>
+        </div>
+      </div>
+
+      <div id="board" class="board"></div>
+
+      <div class="card">
+        <h3>Players</h3>
+        <div id="playersList" class="players"></div>
+      </div>
+
+      <div class="card">
+        <h3>History</h3>
+        <div id="historyList" class="history"></div>
+      </div>
+    </section>
+  </main>
+
+  <script src="config.js"></script>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
