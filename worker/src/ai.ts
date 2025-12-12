@@ -59,7 +59,8 @@ async function callOpenAI(
 export async function generateAIClue(
   apiKey: string,
   gameState: GameState,
-  team: Team
+  team: Team,
+  model: string = 'gpt-4o'
 ): Promise<AIClueCandidate> {
   // Get words by type
   const teamWords = gameState.words.filter((w, i) =>
@@ -136,12 +137,15 @@ Strategy tips:
     },
   };
 
+  // Some models (o3, o4-mini) don't support temperature
+  const supportsTemperature = !model.startsWith('o3') && !model.startsWith('o4');
+
   const result = await callOpenAI(
     apiKey,
     [{ role: 'user', content: prompt }],
     schema,
-    'gpt-4o',
-    0.7
+    model,
+    supportsTemperature ? 0.7 : 1
   );
 
   return result as AIClueCandidate;
@@ -155,7 +159,8 @@ export async function generateAIGuesses(
   gameState: GameState,
   clueWord: string,
   clueNumber: number,
-  team: Team
+  team: Team,
+  model: string = 'gpt-4o-mini'
 ): Promise<AIGuessResponse> {
   const unrevealedWords = gameState.words.filter((w, i) => !gameState.revealed[i]);
 
@@ -221,12 +226,15 @@ Guidelines:
     },
   };
 
+  // Some models (o3, o4-mini) don't support temperature
+  const supportsTemperature = !model.startsWith('o3') && !model.startsWith('o4');
+
   const result = await callOpenAI(
     apiKey,
     [{ role: 'user', content: prompt }],
     schema,
-    'gpt-4o-mini',
-    0.3
+    model,
+    supportsTemperature ? 0.3 : 1
   );
 
   return result as AIGuessResponse;

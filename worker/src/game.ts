@@ -11,6 +11,7 @@ import {
   Player,
   Clue,
   RoleConfig,
+  ModelConfig,
   GuessResult,
   AIClueCandidate,
 } from './types';
@@ -118,6 +119,12 @@ export class GameRoom {
         blueSpymaster: 'human',
         blueGuesser: 'human',
       },
+      modelConfig: {
+        redSpymaster: 'gpt-4o',
+        redGuesser: 'gpt-4o-mini',
+        blueSpymaster: 'gpt-4o',
+        blueGuesser: 'gpt-4o-mini',
+      },
       players: [],
       words,
       key,
@@ -158,8 +165,11 @@ export class GameRoom {
       return jsonResponse({ error: 'Can only configure during setup' }, 400);
     }
 
-    const body = await request.json() as { roleConfig: RoleConfig };
+    const body = await request.json() as { roleConfig: RoleConfig; modelConfig?: ModelConfig };
     this.gameState!.roleConfig = body.roleConfig;
+    if (body.modelConfig) {
+      this.gameState!.modelConfig = body.modelConfig;
+    }
     this.gameState!.updatedAt = Date.now();
 
     await this.saveState();
@@ -433,10 +443,15 @@ export class GameRoom {
 
     // Generate a new AI clue
     try {
+      // Get the configured model for this team's spymaster
+      const modelKey = `${team}Spymaster` as keyof typeof this.gameState.modelConfig;
+      const model = this.gameState!.modelConfig[modelKey];
+
       const aiClue = await generateAIClue(
         this.env.OPENAI_API_KEY,
         this.gameState!,
-        team
+        team,
+        model
       );
 
       this.pendingAIClue = aiClue;
@@ -467,12 +482,17 @@ export class GameRoom {
     const clue = this.gameState!.currentClue;
 
     try {
+      // Get the configured model for this team's guesser
+      const modelKey = `${clue.team}Guesser` as keyof typeof this.gameState.modelConfig;
+      const model = this.gameState!.modelConfig[modelKey];
+
       const suggestions = await generateAIGuesses(
         this.env.OPENAI_API_KEY,
         this.gameState!,
         clue.word,
         clue.number,
-        clue.team
+        clue.team,
+        model
       );
 
       return jsonResponse({
@@ -506,13 +526,18 @@ export class GameRoom {
     const clue = this.gameState!.currentClue;
 
     try {
+      // Get the configured model for this team's guesser
+      const modelKey = `${clue.team}Guesser` as keyof typeof this.gameState.modelConfig;
+      const model = this.gameState!.modelConfig[modelKey];
+
       // Get AI suggestions
       const suggestions = await generateAIGuesses(
         this.env.OPENAI_API_KEY,
         this.gameState!,
         clue.word,
         clue.number,
-        clue.team
+        clue.team,
+        model
       );
 
       if (suggestions.suggestions.length === 0) {
@@ -658,6 +683,7 @@ export class GameRoom {
       roomCode: gs.roomCode,
       phase: gs.phase,
       roleConfig: gs.roleConfig,
+      modelConfig: gs.modelConfig,
       players: gs.players,
       words: gs.words,
       revealed: gs.revealed,

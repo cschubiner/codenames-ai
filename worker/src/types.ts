@@ -14,6 +14,13 @@ export interface RoleConfig {
   blueGuesser: PlayerType;
 }
 
+export interface ModelConfig {
+  redSpymaster: string;
+  redGuesser: string;
+  blueSpymaster: string;
+  blueGuesser: string;
+}
+
 export interface Player {
   id: string;
   name: string;
@@ -45,6 +52,7 @@ export interface GameState {
 
   // Role configuration
   roleConfig: RoleConfig;
+  modelConfig: ModelConfig;
   players: Player[];
 
   // Board state
@@ -85,6 +93,7 @@ export interface CreateGameResponse {
 
 export interface ConfigureRolesRequest {
   roleConfig: RoleConfig;
+  modelConfig?: ModelConfig;
 }
 
 export interface JoinGameRequest {
@@ -119,6 +128,7 @@ export interface PublicGameState {
   roomCode: string;
   phase: GameState['phase'];
   roleConfig: RoleConfig;
+  modelConfig: ModelConfig;
   players: Player[];
   words: string[];
   revealed: boolean[];

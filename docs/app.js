@@ -39,6 +39,19 @@ function Home({ onHostGame, onJoinGame }) {
   `;
 }
 
+// Available AI models
+const AI_MODELS = [
+  { id: 'gpt-4o', name: 'GPT-4o', description: 'Best quality' },
+  { id: 'gpt-4o-mini', name: 'GPT-4o Mini', description: 'Fast & efficient' },
+  { id: 'gpt-4.1-nano', name: 'GPT-4.1 Nano', description: 'Ultra fast' },
+  { id: 'o3', name: 'o3', description: 'Advanced reasoning' },
+  { id: 'o4-mini', name: 'o4-mini', description: 'Efficient reasoning' },
+];
+
+// Default models for each role type
+const DEFAULT_SPYMASTER_MODEL = 'gpt-4o';
+const DEFAULT_GUESSER_MODEL = 'gpt-4o-mini';
+
 // Setup Screen (Host)
 function Setup({ gameState, onConfigure, onStart, onBack, error }) {
   const [roleConfig, setRoleConfig] = useState(gameState?.roleConfig || {
@@ -48,17 +61,30 @@ function Setup({ gameState, onConfigure, onStart, onBack, error }) {
     blueGuesser: 'human',
   });
 
+  const [modelConfig, setModelConfig] = useState(gameState?.modelConfig || {
+    redSpymaster: DEFAULT_SPYMASTER_MODEL,
+    redGuesser: DEFAULT_GUESSER_MODEL,
+    blueSpymaster: DEFAULT_SPYMASTER_MODEL,
+    blueGuesser: DEFAULT_GUESSER_MODEL,
+  });
+
   const updateRole = (role, value) => {
-    const newConfig = { ...roleConfig, [role]: value };
-    setRoleConfig(newConfig);
-    onConfigure(newConfig);
+    const newRoleConfig = { ...roleConfig, [role]: value };
+    setRoleConfig(newRoleConfig);
+    onConfigure({ roleConfig: newRoleConfig, modelConfig });
+  };
+
+  const updateModel = (role, model) => {
+    const newModelConfig = { ...modelConfig, [role]: model };
+    setModelConfig(newModelConfig);
+    onConfigure({ roleConfig, modelConfig: newModelConfig });
   };
 
   const roles = [
-    { key: 'redSpymaster', label: 'Red Spymaster', team: 'red' },
-    { key: 'redGuesser', label: 'Red Guesser', team: 'red' },
-    { key: 'blueSpymaster', label: 'Blue Spymaster', team: 'blue' },
-    { key: 'blueGuesser', label: 'Blue Guesser', team: 'blue' },
+    { key: 'redSpymaster', label: 'Red Spymaster', team: 'red', type: 'spymaster' },
+    { key: 'redGuesser', label: 'Red Guesser', team: 'red', type: 'guesser' },
+    { key: 'blueSpymaster', label: 'Blue Spymaster', team: 'blue', type: 'spymaster' },
+    { key: 'blueGuesser', label: 'Blue Guesser', team: 'blue', type: 'guesser' },
   ];
 
   // Calculate which human roles are still needed
@@ -100,6 +126,20 @@ function Setup({ gameState, onConfigure, onStart, onBack, error }) {
               <option value="human">Human</option>
               <option value="ai">AI</option>
             </select>
+            ${roleConfig[role.key] === 'ai' && html`
+              <div style="margin-top: 0.5rem;">
+                <label style="font-size: 0.8rem; color: var(--text-light);">Model:</label>
+                <select
+                  value=${modelConfig[role.key]}
+                  onChange=${(e) => updateModel(role.key, e.target.value)}
+                  style="font-size: 0.85rem; padding: 0.4rem;"
+                >
+                  ${AI_MODELS.map(m => html`
+                    <option value=${m.id}>${m.name}</option>
+                  `)}
+                </select>
+              </div>
+            `}
           </div>
         `)}
       </div>
