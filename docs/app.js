@@ -351,90 +351,77 @@ function Game({ roomCode, player, isSpymaster, onLeave }) {
   const [aiClueRequested, setAiClueRequested] = useState(false);
   const [aiGuessRequested, setAiGuessRequested] = useState(false);
 
-  // Auto-trigger AI spymaster clue generation
+  // Auto-trigger AI actions
+  // - Always trigger AI spymaster for current team (needed for clues)
+  // - Only trigger AI guesser if it's NOT your team (opponent's AI guesser)
+  //   OR if you're a spymaster (you're not guessing, so AI guesser should play)
   useEffect(() => {
-    if (!gameState || gameState.phase !== 'playing') return;
-    if (gameState.currentClue) {
-      setAiClueRequested(false); // Reset when clue is given
-      return;
-    }
+    if (!gameState || gameState.phase !== 'playing' || gameState.winner) return;
+    if (aiLoading) return;
 
     const currentTeam = gameState.currentTeam;
     const spymasterKey = `${currentTeam}Spymaster`;
+    const guesserKey = `${currentTeam}Guesser`;
     const isAISpymaster = gameState.roleConfig[spymasterKey] === 'ai';
+    const isAIGuesser = gameState.roleConfig[guesserKey] === 'ai';
 
-    if (isAISpymaster && !aiClueRequested && !aiLoading) {
+    // Determine if we should trigger the AI guesser
+    // Don't trigger if: it's your team AND you're the guesser (human guesser)
+    const isMyTeamsTurn = player?.team === currentTeam;
+    const iAmGuesser = !isSpymaster;
+    const shouldTriggerGuesser = isAIGuesser && !(isMyTeamsTurn && iAmGuesser);
+
+    // If spymaster is AI and no clue, generate one
+    if (isAISpymaster && !gameState.currentClue && !aiClueRequested) {
       setAiClueRequested(true);
       setAiLoading(true);
-      console.log('Auto-triggering AI clue for', currentTeam, 'spymaster');
-      // Auto-generate and confirm AI clue
+      console.log('Auto-triggering AI clue for', currentTeam);
+
       (async () => {
         try {
-          // Generate clue
-          console.log('Generating AI clue...');
-          const genResult = await api(`/api/games/${roomCode}/ai-clue`, {
+          await api(`/api/games/${roomCode}/ai-clue`, {
             method: 'POST',
             body: JSON.stringify({}),
           });
-          console.log('AI clue generated:', genResult);
-
-          // Small delay then confirm it
           await new Promise(resolve => setTimeout(resolve, 500));
-
-          console.log('Confirming AI clue...');
-          const confirmResult = await api(`/api/games/${roomCode}/ai-clue`, {
+          await api(`/api/games/${roomCode}/ai-clue`, {
             method: 'POST',
             body: JSON.stringify({ confirm: true }),
           });
-          console.log('AI clue confirmed:', confirmResult);
-
           fetchState();
         } catch (err) {
           console.error('AI clue error:', err);
-          setAiClueRequested(false); // Allow retry
+          setAiClueRequested(false);
         } finally {
           setAiLoading(false);
         }
       })();
-    }
-  }, [gameState, aiClueRequested, aiLoading, roomCode, fetchState]);
-
-  // Auto-trigger AI guesser when clue is given and guesser is AI
-  useEffect(() => {
-    if (!gameState || gameState.phase !== 'playing') return;
-    if (!gameState.currentClue) {
-      setAiGuessRequested(false); // Reset when no clue
-      return;
-    }
-    if (gameState.guessesRemaining <= 0) {
-      setAiGuessRequested(false);
       return;
     }
 
-    const currentTeam = gameState.currentTeam;
-    const guesserKey = `${currentTeam}Guesser`;
-    const isAIGuesser = gameState.roleConfig[guesserKey] === 'ai';
+    // Reset clue requested when clue exists
+    if (gameState.currentClue && aiClueRequested) {
+      setAiClueRequested(false);
+    }
 
-    if (isAIGuesser && !aiGuessRequested && !aiLoading) {
+    // If guesser is AI and we should trigger it
+    if (shouldTriggerGuesser && gameState.currentClue && gameState.guessesRemaining > 0 && !aiGuessRequested) {
       setAiGuessRequested(true);
       setAiLoading(true);
-      console.log('Auto-triggering AI guess for', currentTeam, 'guesser');
+      console.log('Auto-triggering AI guess for', currentTeam);
 
       (async () => {
         try {
-          // Small delay for better UX
           await new Promise(resolve => setTimeout(resolve, 1000));
-
           const result = await api(`/api/games/${roomCode}/ai-play`, {
             method: 'POST',
           });
           console.log('AI guess result:', result);
 
-          // If turn didn't end and game is still going, allow another guess
-          if (!result.result.turnEnded && !result.result.gameOver) {
+          // Allow another guess if turn didn't end
+          if (!result.result?.turnEnded && !result.result?.gameOver) {
             setAiGuessRequested(false);
           }
-
           fetchState();
         } catch (err) {
           console.error('AI guess error:', err);
@@ -443,8 +430,14 @@ function Game({ roomCode, player, isSpymaster, onLeave }) {
           setAiLoading(false);
         }
       })();
+      return;
     }
-  }, [gameState, aiGuessRequested, aiLoading, roomCode, fetchState]);
+
+    // Reset guess requested when no clue or no guesses or turn changed
+    if ((!gameState.currentClue || gameState.guessesRemaining <= 0) && aiGuessRequested) {
+      setAiGuessRequested(false);
+    }
+  }, [gameState, player, isSpymaster, aiLoading, aiClueRequested, aiGuessRequested, roomCode, fetchState]);
 
   const handleClue = async (word, number) => {
     try {
