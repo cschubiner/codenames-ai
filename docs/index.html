@@ -9,120 +9,126 @@
 <body>
   <header class="top">
     <div class="title">Codenames: Humans vs AI Spymasters</div>
-    <div class="subtitle">GitHub Pages frontend • Cloudflare Workers + Durable Objects backend</div>
+    <div class="subtitle">GitHub Pages frontend + Cloudflare Workers + Durable Objects backend</div>
   </header>
 
   <main class="wrap">
-    <section id="configWarning" class="card warning hidden"></section>
+    <section id="configWarning" class="warning-card hidden"></section>
 
     <section id="createView" class="card">
-      <h2>Create a room</h2>
+      <h2>Create a Room</h2>
       <div class="row">
-        <label>Red AI preset</label>
+        <label>Red Team AI Spymaster</label>
         <select id="redPreset"></select>
       </div>
       <div class="row">
-        <label>Blue AI preset</label>
+        <label>Blue Team AI Spymaster</label>
         <select id="bluePreset"></select>
       </div>
-      <button id="createRoomBtn">Create room</button>
+      <button id="createRoomBtn">Create Room</button>
 
       <div id="createResult" class="hidden">
-        <h3>Room created</h3>
-        <div class="small">Share these links:</div>
+        <h3>Room Created!</h3>
         <div class="links">
-          <a id="redLink" href="#" target="_blank" rel="noreferrer">Red team link</a>
-          <a id="blueLink" href="#" target="_blank" rel="noreferrer">Blue team link</a>
-          <a id="specLink" href="#" target="_blank" rel="noreferrer">Spectator link</a>
+          <a id="redLink" href="#" target="_blank" rel="noreferrer">Red Team</a>
+          <a id="blueLink" href="#" target="_blank" rel="noreferrer">Blue Team</a>
+          <a id="specLink" href="#" target="_blank" rel="noreferrer">Spectator</a>
         </div>
       </div>
     </section>
 
     <section id="joinView" class="card hidden">
-      <h2>Join room</h2>
+      <h2>Join Room</h2>
       <div class="row">
-        <label>Room</label>
-        <input id="roomIdInput" placeholder="room id" />
+        <label>Room Code</label>
+        <input id="roomIdInput" placeholder="Enter room code" />
       </div>
 
-      <div id="continueBox" class="hidden">
-        <div class="small">Saved player found for this room:</div>
-        <div id="continueLabel" class="mono"></div>
-        <button id="continueBtn">Continue</button>
-        <button id="forgetBtn" class="secondary">Forget saved player</button>
-        <hr/>
+      <div id="continueBox" class="continue-box hidden">
+        <div class="saved-label">Saved session found:</div>
+        <div id="continueLabel" class="saved-info"></div>
+        <div class="buttons">
+          <button id="continueBtn">Continue</button>
+          <button id="forgetBtn" class="secondary">Forget</button>
+        </div>
       </div>
 
       <div class="row">
-        <label>Name</label>
-        <input id="nameInput" placeholder="Your name" maxlength="32" />
+        <label>Your Name</label>
+        <input id="nameInput" placeholder="Enter your name" maxlength="32" />
       </div>
       <div class="row">
         <label>Team</label>
         <select id="teamSelect">
-          <option value="RED">RED</option>
-          <option value="BLUE">BLUE</option>
-          <option value="SPECTATOR">SPECTATOR</option>
+          <option value="RED">Red Team</option>
+          <option value="BLUE">Blue Team</option>
+          <option value="SPECTATOR">Spectator</option>
         </select>
       </div>
-      <button id="joinBtn">Join</button>
+      <button id="joinBtn">Join Game</button>
     </section>
 
     <section id="gameView" class="hidden">
       <div class="card">
-        <div class="row between">
-          <div>
-            <div class="small">Room</div>
-            <div id="roomLabel" class="mono"></div>
+        <div class="game-header">
+          <div class="left">
+            <div class="room-info">
+              Room: <span id="roomLabel" class="room-id"></span>
+            </div>
           </div>
-          <div>
-            <div class="small">You</div>
-            <div id="youLabel" class="mono"></div>
+          <div class="center">
+            <div class="score-display">
+              <div class="score-team red">
+                <span id="redScore" class="count">9</span>
+                <span class="label">Red</span>
+              </div>
+              <span class="score-vs">vs</span>
+              <div class="score-team blue">
+                <span id="blueScore" class="count">8</span>
+                <span class="label">Blue</span>
+              </div>
+            </div>
           </div>
           <div class="right">
-            <button id="resetBtn" class="secondary">New game</button>
+            <div class="player-info">
+              <span id="youLabel" class="team-badge"></span>
+            </div>
           </div>
         </div>
 
-        <div class="row between">
-          <div>
-            <div class="small">Turn</div>
-            <div id="turnLabel" class="pill"></div>
-          </div>
-          <div>
-            <div class="small">Clue</div>
-            <div id="clueLabel" class="mono"></div>
-          </div>
-          <div>
-            <div class="small">Guesses</div>
-            <div id="guessCountLabel" class="mono"></div>
-          </div>
+        <div id="clueSection" class="clue-section">
+          <div id="turnIndicator" class="turn-indicator"></div>
+          <div id="clueWord" class="clue-word"></div>
+          <div id="clueNumber" class="clue-number"></div>
+          <div id="guessProgress" class="guess-progress"></div>
         </div>
 
         <div id="statusBanner" class="banner hidden"></div>
 
         <div class="controls">
-          <button id="stopBtn">Stop</button>
-          <button id="aiSuggestBtn" class="secondary">AI suggest guesses</button>
-          <button id="aiPlayBtn" class="secondary">AI play next guess</button>
+          <button id="stopBtn" class="secondary">Pass Turn</button>
+          <button id="aiSuggestBtn" class="secondary">AI Suggest</button>
+          <button id="aiPlayBtn">AI Play Next</button>
+          <button id="resetBtn" class="danger">New Game</button>
         </div>
 
-        <div id="aiBox" class="ai hidden">
-          <div class="small">AI suggestions</div>
+        <div id="aiBox" class="ai-box hidden">
+          <h4>AI Suggestions</h4>
           <div id="aiList"></div>
         </div>
       </div>
 
       <div id="board" class="board"></div>
 
-      <div class="card">
-        <h3>Players</h3>
-        <div id="playersList" class="players"></div>
-      </div>
-
-      <div class="card">
-        <h3>History</h3>
-        <div id="historyList" class="history"></div>
+      <div class="side-panels">
+        <div class="players-section">
+          <h3>Players</h3>
+          <div id="playersList"></div>
+        </div>
+        <div class="history-section">
+          <h3>History</h3>
+          <div id="historyList"></div>
+        </div>
       </div>
     </section>
   </main>

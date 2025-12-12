@@ -25,9 +25,13 @@ const views = {
 
   roomLabel: el("roomLabel"),
   youLabel: el("youLabel"),
-  turnLabel: el("turnLabel"),
-  clueLabel: el("clueLabel"),
-  guessCountLabel: el("guessCountLabel"),
+  redScore: el("redScore"),
+  blueScore: el("blueScore"),
+  clueSection: el("clueSection"),
+  turnIndicator: el("turnIndicator"),
+  clueWord: el("clueWord"),
+  clueNumber: el("clueNumber"),
+  guessProgress: el("guessProgress"),
   statusBanner: el("statusBanner"),
   stopBtn: el("stopBtn"),
   aiSuggestBtn: el("aiSuggestBtn"),
@@ -48,7 +52,7 @@ let pollTimer = null;
 let lastVersion = 0;
 
 function show(elem, yes) {
-  elem.classList.toggle("hidden", !yes);
+  if (elem) elem.classList.toggle("hidden", !yes);
 }
 
 function warn(msg) {
@@ -129,7 +133,7 @@ async function loadPresets() {
   const optHtml = presets
     .map(
       (p) =>
-        `<option value="${p.id}">${p.id} — ${p.name} (S:${p.spymaster_model} / G:${p.guesser_model})</option>`,
+        `<option value="${p.id}">${p.name}</option>`,
     )
     .join("");
 
@@ -224,7 +228,11 @@ async function startGame() {
   show(views.gameView, true);
 
   views.roomLabel.textContent = currentRoom;
-  views.youLabel.textContent = `${player?.name || "?"} (${player?.team || "?"})`;
+
+  // Set player badge
+  const teamClass = (player?.team || "").toLowerCase();
+  views.youLabel.textContent = player?.name || "?";
+  views.youLabel.className = `team-badge ${teamClass}`;
 
   views.stopBtn.onclick = async () => {
     await apiPost(`/api/rooms/${currentRoom}/stop`, { ...player });
@@ -237,16 +245,19 @@ async function startGame() {
     await aiPlayNext();
   };
   views.resetBtn.onclick = async () => {
-    await apiPost(`/api/rooms/${currentRoom}/reset`, { ...player });
-    await fetchAndRender(true);
+    if (confirm("Start a new game? This will reset the board.")) {
+      await apiPost(`/api/rooms/${currentRoom}/reset`, { ...player });
+      await fetchAndRender(true);
+    }
   };
 
   await fetchAndRender(true);
   startPolling();
 }
 
-function renderBanner(text, showIt = true) {
+function renderBanner(text, type = "info", showIt = true) {
   views.statusBanner.textContent = text;
+  views.statusBanner.className = `banner ${type}`;
   show(views.statusBanner, showIt);
 }
 
@@ -270,11 +281,67 @@ function cardClass(cardType) {
   return "";
 }
 
-function setTurnPill(team) {
-  views.turnLabel.textContent = team || "?";
-  views.turnLabel.classList.remove("red", "blue");
-  if (team === "RED") views.turnLabel.classList.add("red");
-  if (team === "BLUE") views.turnLabel.classList.add("blue");
+function updateClueSection(state) {
+  const turn = state.turn || "?";
+  const turnClass = turn.toLowerCase();
+
+  views.turnIndicator.textContent = `${turn}'s Turn`;
+  views.turnIndicator.className = `turn-indicator ${turnClass}`;
+
+  if (state.ended) {
+    views.clueSection.className = "clue-section";
+    views.clueWord.textContent = "GAME OVER";
+    views.clueNumber.textContent = "";
+    views.guessProgress.textContent = "";
+  } else if (state.clue?.status === "pending") {
+    views.clueSection.className = "clue-section pending";
+    views.clueWord.innerHTML = '<span class="loading-text">AI generating clue</span>';
+    views.clueNumber.textContent = "";
+    views.guessProgress.textContent = "";
+  } else if (state.clue?.status === "ready") {
+    views.clueSection.className = "clue-section";
+    views.clueWord.textContent = state.clue.clue || "?";
+    views.clueNumber.textContent = state.clue.number || "?";
+    views.guessProgress.innerHTML = `Guesses: <span class="current">${state.guesses_made_this_turn}</span> / ${state.max_guesses_this_turn}`;
+  }
+}
+
+function updateScores(state) {
+  // Count remaining words for each team
+  let redRemaining = 0;
+  let blueRemaining = 0;
+
+  const revealedMap = buildRevealedMap(state.history);
+
+  for (let i = 0; i < 25; i++) {
+    const word = state.board_words[i];
+    const isRevealed = state.revealed[i];
+
+    if (!isRevealed) {
+      // We don't know the key, so count revealed ones
+      // Actually for unrevealed we can't know - let's count from history
+    }
+
+    // Count revealed cards by type
+    if (isRevealed) {
+      const cardType = revealedMap.get(word);
+      // Count for "found" not "remaining"
+    }
+  }
+
+  // Count revealed of each type
+  let redFound = 0, blueFound = 0;
+  for (const [word, cardType] of revealedMap) {
+    if (cardType === "RED") redFound++;
+    if (cardType === "BLUE") blueFound++;
+  }
+
+  // Starting team has 9, other has 8
+  const redTotal = state.starting_team === "RED" ? 9 : 8;
+  const blueTotal = state.starting_team === "BLUE" ? 9 : 8;
+
+  views.redScore.textContent = redTotal - redFound;
+  views.blueScore.textContent = blueTotal - blueFound;
 }
 
 function renderBoard(state) {
@@ -293,7 +360,7 @@ function renderBoard(state) {
           await apiPost(`/api/rooms/${currentRoom}/guess`, { ...player, word: w });
           await fetchAndRender(true);
         } catch (e) {
-          renderBanner(String(e?.message || e), true);
+          renderBanner(String(e?.message || e), "error", true);
         }
       };
       views.board.appendChild(btn);
@@ -329,8 +396,9 @@ function renderPlayers(players) {
   views.playersList.innerHTML = "";
   for (const p of players || []) {
     const div = document.createElement("div");
-    div.className = "p";
-    div.innerHTML = `<div><span class="mono">${p.name}</span> <span class="tag">${p.team}</span></div><div class="tag">${new Date(p.joined_at).toLocaleTimeString()}</div>`;
+    div.className = "player-item";
+    const teamClass = (p.team || "spectator").toLowerCase();
+    div.innerHTML = `<span class="name">${p.name}</span><span class="team-tag ${teamClass}">${p.team}</span>`;
     views.playersList.appendChild(div);
   }
 }
@@ -340,40 +408,48 @@ function renderHistory(history) {
   views.historyList.innerHTML = "";
   for (const ev of items) {
     const div = document.createElement("div");
-    div.className = "h";
-    div.textContent = formatEvent(ev);
+    div.className = `history-item ${getHistoryClass(ev)}`;
+    const ts = ev.at ? new Date(ev.at).toLocaleTimeString() : "";
+    div.innerHTML = `<span class="time">${ts}</span>${formatEvent(ev)}`;
     views.historyList.appendChild(div);
   }
 }
 
+function getHistoryClass(ev) {
+  if (ev.t === "clue_ready") return "clue";
+  if (ev.t === "guess") {
+    return ev.result === ev.team ? "guess-correct" : "guess-wrong";
+  }
+  if (ev.t === "turn_end") return "turn-end";
+  if (ev.t === "game_end") return "game-end";
+  return "";
+}
+
 function formatEvent(ev) {
-  const ts = ev.at ? new Date(ev.at).toLocaleTimeString() : "";
-  if (ev.t === "clue_ready") return `${ts} • CLUE for ${ev.team}: ${ev.clue} (${ev.number})`;
-  if (ev.t === "guess") return `${ts} • ${ev.team} guessed ${ev.word} → ${ev.result}`;
-  if (ev.t === "turn_end") return `${ts} • Turn ends → ${ev.next_team} (${ev.reason})`;
-  if (ev.t === "stop") return `${ts} • ${ev.team} stopped`;
-  if (ev.t === "player_joined") return `${ts} • ${ev.name} joined as ${ev.team}`;
-  if (ev.t === "game_end") return `${ts} • GAME OVER → ${ev.winner} (${ev.reason})`;
-  if (ev.t === "reset") return `${ts} • New game started`;
-  return `${ts} • ${ev.t}`;
+  if (ev.t === "clue_ready") return `<strong>${ev.team}</strong> clue: ${ev.clue} (${ev.number})`;
+  if (ev.t === "guess") return `<strong>${ev.team}</strong> guessed ${ev.word} - ${ev.result}`;
+  if (ev.t === "turn_end") return `Turn ends, next: ${ev.next_team}`;
+  if (ev.t === "stop") return `<strong>${ev.team}</strong> passed`;
+  if (ev.t === "player_joined") return `${ev.name} joined ${ev.team}`;
+  if (ev.t === "game_end") return `<strong>GAME OVER</strong> - ${ev.winner} wins!`;
+  if (ev.t === "reset") return `New game started`;
+  return ev.t;
 }
 
 function renderState(state) {
-  setTurnPill(state.turn);
+  updateClueSection(state);
+  updateScores(state);
 
   if (state.ended) {
-    renderBanner(`Game over — winner: ${state.winner}`, true);
+    const winnerClass = state.winner === "RED" ? "red-wins" : "blue-wins";
+    views.statusBanner.className = `banner game-over ${winnerClass}`;
+    views.statusBanner.textContent = `${state.winner} WINS!`;
+    show(views.statusBanner, true);
   } else if (state.clue?.status === "pending") {
-    renderBanner("AI spymaster is generating a clue…", true);
+    renderBanner("AI spymaster is thinking...", "info", true);
   } else {
-    renderBanner("", false);
+    show(views.statusBanner, false);
   }
-
-  const clueText =
-    state.clue?.status === "ready" ? `${state.clue.clue} (${state.clue.number})` : "…";
-  views.clueLabel.textContent = clueText;
-
-  views.guessCountLabel.textContent = `${state.guesses_made_this_turn}/${state.max_guesses_this_turn}`;
 
   renderBoard(state);
   renderPlayers(state.players);
@@ -381,9 +457,13 @@ function renderState(state) {
 
   // Enable/disable buttons
   const myTurn = player?.team === state.turn;
-  views.stopBtn.disabled = !(myTurn && state.clue?.status === "ready" && !state.ended);
-  views.aiPlayBtn.disabled = !(myTurn && state.clue?.status === "ready" && !state.ended);
-  views.aiSuggestBtn.disabled = !(state.clue?.status === "ready" && !state.ended);
+  const clueReady = state.clue?.status === "ready";
+  const gameActive = !state.ended;
+
+  views.stopBtn.disabled = !(myTurn && clueReady && gameActive);
+  views.aiPlayBtn.disabled = !(myTurn && clueReady && gameActive);
+  views.aiSuggestBtn.disabled = !(clueReady && gameActive);
+  views.resetBtn.disabled = false;
 }
 
 async function fetchAndRender(force = false) {
@@ -397,31 +477,47 @@ async function fetchAndRender(force = false) {
 
 async function aiSuggest() {
   try {
+    views.aiSuggestBtn.disabled = true;
+    views.aiSuggestBtn.textContent = "Loading...";
+
     const res = await apiPost(`/api/rooms/${currentRoom}/ai_guess`, { ...player });
     show(views.aiBox, true);
     const list = res.guesses || [];
     views.aiList.innerHTML = "";
+
     if (!list.length) {
-      views.aiList.textContent = "(no guesses)";
+      views.aiList.innerHTML = '<div class="suggestion"><span class="word">No suggestions</span></div>';
       return;
     }
+
     for (const g of list) {
       const div = document.createElement("div");
-      div.className = "item";
-      div.innerHTML = `<div class="mono">${g.word}</div><div class="tag">${(g.confidence ?? 0).toFixed(2)}</div>`;
+      div.className = "suggestion";
+      const conf = (g.confidence ?? 0) * 100;
+      const confClass = conf >= 70 ? "high" : conf >= 40 ? "medium" : "";
+      div.innerHTML = `<span class="word">${g.word}</span><span class="confidence ${confClass}">${conf.toFixed(0)}%</span>`;
       views.aiList.appendChild(div);
     }
   } catch (e) {
-    renderBanner(String(e?.message || e), true);
+    renderBanner(String(e?.message || e), "error", true);
+  } finally {
+    views.aiSuggestBtn.disabled = false;
+    views.aiSuggestBtn.textContent = "AI Suggest";
   }
 }
 
 async function aiPlayNext() {
   try {
+    views.aiPlayBtn.disabled = true;
+    views.aiPlayBtn.textContent = "Playing...";
+
     await apiPost(`/api/rooms/${currentRoom}/ai_play_next`, { ...player });
     await fetchAndRender(true);
   } catch (e) {
-    renderBanner(String(e?.message || e), true);
+    renderBanner(String(e?.message || e), "error", true);
+  } finally {
+    views.aiPlayBtn.disabled = false;
+    views.aiPlayBtn.textContent = "AI Play Next";
   }
 }
 
@@ -436,17 +532,25 @@ async function aiPlayNext() {
 
   views.createRoomBtn.onclick = async () => {
     try {
+      views.createRoomBtn.disabled = true;
+      views.createRoomBtn.textContent = "Creating...";
       await createRoom();
     } catch (e) {
       warn(String(e?.message || e));
+      views.createRoomBtn.disabled = false;
+      views.createRoomBtn.textContent = "Create Room";
     }
   };
 
   views.joinBtn.onclick = async () => {
     try {
+      views.joinBtn.disabled = true;
+      views.joinBtn.textContent = "Joining...";
       await joinRoom();
     } catch (e) {
       warn(String(e?.message || e));
+      views.joinBtn.disabled = false;
+      views.joinBtn.textContent = "Join Game";
     }
   };
 
