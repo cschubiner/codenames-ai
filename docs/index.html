@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Codenames: Humans vs AI Spymasters</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="top">
+    <div class="title">Codenames: Humans vs AI Spymasters</div>
+    <div class="subtitle">GitHub Pages frontend • Cloudflare Workers + Durable Objects backend</div>
+  </header>
+
+  <main class="wrap">
+    <section id="configWarning" class="card warning hidden"></section>
+
+    <section id="createView" class="card">
+      <h2>Create a room</h2>
+      <div class="row">
+        <label>Red AI preset</label>
+        <select id="redPreset"></select>
+      </div>
+      <div class="row">
+        <label>Blue AI preset</label>
+        <select id="bluePreset"></select>
+      </div>
+      <button id="createRoomBtn">Create room</button>
+
+      <div id="createResult" class="hidden">
+        <h3>Room created</h3>
+        <div class="small">Share these links:</div>
+        <div class="links">
+          <a id="redLink" href="#" target="_blank" rel="noreferrer">Red team link</a>
+          <a id="blueLink" href="#" target="_blank" rel="noreferrer">Blue team link</a>
+          <a id="specLink" href="#" target="_blank" rel="noreferrer">Spectator link</a>
+        </div>
+      </div>
+    </section>
+
+    <section id="joinView" class="card hidden">
+      <h2>Join room</h2>
+      <div class="row">
+        <label>Room</label>
+        <input id="roomIdInput" placeholder="room id" />
+      </div>
+
+      <div id="continueBox" class="hidden">
+        <div class="small">Saved player found for this room:</div>
+        <div id="continueLabel" class="mono"></div>
+        <button id="continueBtn">Continue</button>
+        <button id="forgetBtn" class="secondary">Forget saved player</button>
+        <hr/>
+      </div>
+
+      <div class="row">
+        <label>Name</label>
+        <input id="nameInput" placeholder="Your name" maxlength="32" />
+      </div>
+      <div class="row">
+        <label>Team</label>
+        <select id="teamSelect">
+          <option value="RED">RED</option>
+          <option value="BLUE">BLUE</option>
+          <option value="SPECTATOR">SPECTATOR</option>
+        </select>
+      </div>
+      <button id="joinBtn">Join</button>
+    </section>
+
+    <section id="gameView" class="hidden">
+      <div class="card">
+        <div class="row between">
+          <div>
+            <div class="small">Room</div>
+            <div id="roomLabel" class="mono"></div>
+          </div>
+          <div>
+            <div class="small">You</div>
+            <div id="youLabel" class="mono"></div>
+          </div>
+          <div class="right">
+            <button id="resetBtn" class="secondary">New game</button>
+          </div>
+        </div>
+
+        <div class="row between">
+          <div>
+            <div class="small">Turn</div>
+            <div id="turnLabel" class="pill"></div>
+          </div>
+          <div>
+            <div class="small">Clue</div>
+            <div id="clueLabel" class="mono"></div>
+          </div>
+          <div>
+            <div class="small">Guesses</div>
+            <div id="guessCountLabel" class="mono"></div>
+          </div>
+        </div>
+
+        <div id="statusBanner" class="banner hidden"></div>
+
+        <div class="controls">
+          <button id="stopBtn">Stop</button>
+          <button id="aiSuggestBtn" class="secondary">AI suggest guesses</button>
+          <button id="aiPlayBtn" class="secondary">AI play next guess</button>
+        </div>
+
+        <div id="aiBox" class="ai hidden">
+          <div class="small">AI suggestions</div>
+          <div id="aiList"></div>
+        </div>
+      </div>
+
+      <div id="board" class="board"></div>
+
+      <div class="card">
+        <h3>Players</h3>
+        <div id="playersList" class="players"></div>
+      </div>
+
+      <div class="card">
+        <h3>History</h3>
+        <div id="historyList" class="history"></div>
+      </div>
+    </section>
+  </main>
+
+  <script src="config.js"></script>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
