@@ -15,8 +15,10 @@ import {
   ReasoningEffortConfig,
   CustomInstructionsConfig,
   AssassinBehavior,
+  TurnTimerSetting,
   GuessResult,
   AIClueCandidate,
+  AIGuessResponse,
 } from './types';
 import { generateAIClue, generateAIGuesses } from './ai';
 
@@ -35,6 +37,15 @@ export class GameRoom {
   private pendingAIClue: AIClueCandidate | null = null;
   private pendingAIClueTeam: Team | null = null;
   private pendingAIClueLoaded = false;
+
+  // Debounce/lock AI endpoints per room (prevents thundering herd from multiple clients)
+  private aiClueTask: Promise<AIClueCandidate> | null = null;
+  private aiSuggestTask: Promise<AIGuessResponse> | null = null;
+  private aiSuggestSig: string | null = null;
+  private aiSuggestCache: AIGuessResponse | null = null;
+  private aiSuggestCacheSig: string | null = null;
+  private aiSuggestCacheAt = 0;
+  private aiPlayInFlight = false;
 
   constructor(state: DurableObjectState, env: Env) {
     this.state = state;
@@ -120,6 +131,10 @@ export class GameRoom {
         return this.handleSetAssassinBehavior(request);
       }
 
+      if (method === 'POST' && path === '/set-turn-timer') {
+        return this.handleSetTurnTimer(request);
+      }
+
       return jsonResponse({ error: 'Not found' }, 404);
     } catch (error) {
       console.error('Error handling request:', error);
@@ -148,6 +163,9 @@ export class GameRoom {
     if (!gs.assassinBehavior || !['instant_loss', 'reveal_opponent', 'add_own_cards'].includes(gs.assassinBehavior)) {
       gs.assassinBehavior = 'instant_loss';
     }
+    if (!('turnTimer' in gs) || ![60, 120, 180, 240, null].includes(gs.turnTimer)) {
+      gs.turnTimer = null;
+    }
     if (!gs.roleConfig) gs.roleConfig = { ...roleConfigDefaults };
     for (const key of Object.keys(roleConfigDefaults) as Array<keyof RoleConfig>) {
       if (gs.roleConfig[key] !== 'human' && gs.roleConfig[key] !== 'ai') {
@@ -172,6 +190,7 @@ export class GameRoom {
     // Timing fields
     if (!gs.turnPhase) gs.turnPhase = gs.currentClue ? 'guess' : 'clue';
     if (typeof gs.phaseStartTime !== 'number') gs.phaseStartTime = null;
+    if (typeof gs.turnStartTime !== 'number') gs.turnStartTime = null;
     if (!gs.timing) {
       gs.timing = {
         red: { spymasterMs: 0, guesserMs: 0 },
@@ -197,6 +216,7 @@ export class GameRoom {
       showAIReasoning: true,
       showSpymasterReasoning: false,
       assassinBehavior: 'instant_loss',
+      turnTimer: null,
       roleConfig: {
         redSpymaster: 'human',
         redGuesser: 'human',
@@ -225,6 +245,7 @@ export class GameRoom {
       clueHistory: [],
       guessHistory: [],
       phaseStartTime: null,
+      turnStartTime: null,
       timing: {
         red: { spymasterMs: 0, guesserMs: 0 },
         blue: { spymasterMs: 0, guesserMs: 0 },
@@ -244,7 +265,8 @@ export class GameRoom {
   private handleGetState(request: Request): Response {
     const url = new URL(request.url);
     const role = url.searchParams.get('role') as RoleType | null;
-    const team = url.searchParams.get('team') as Team | null;
+    // team parameter reserved for future use (filtering by team)
+    void url.searchParams.get('team');
 
     const isSpymaster = role === 'spymaster';
     return jsonResponse({
@@ -345,6 +367,7 @@ export class GameRoom {
     this.gameState!.phase = 'playing';
     this.gameState!.turnPhase = 'clue';
     this.gameState!.phaseStartTime = Date.now(); // Start timing for first spymaster
+    this.gameState!.turnStartTime = Date.now(); // Start turn timer for first turn
     this.gameState!.updatedAt = Date.now();
 
     await this.saveState();
@@ -640,10 +663,29 @@ export class GameRoom {
     return jsonResponse({ gameState: this.getPublicState() });
   }
 
+  private async handleSetTurnTimer(request: Request): Promise<Response> {
+    if (this.gameState!.phase !== 'setup') {
+      return jsonResponse({ error: 'Can only change turn timer during setup' }, 400);
+    }
+
+    const body = await request.json() as { turnTimer: TurnTimerSetting };
+
+    if (![60, 120, 180, 240, null].includes(body.turnTimer)) {
+      return jsonResponse({ error: 'Invalid turn timer value' }, 400);
+    }
+
+    this.gameState!.turnTimer = body.turnTimer;
+    this.gameState!.updatedAt = Date.now();
+    await this.saveState();
+
+    return jsonResponse({ gameState: this.getPublicState() });
+  }
+
   private async handleAIClue(request: Request): Promise<Response> {
     if (!this.env.OPENAI_API_KEY) {
       return jsonResponse({ error: 'OpenAI API key not configured' }, 500);
     }
+    const apiKey = this.env.OPENAI_API_KEY;
 
     if (this.gameState!.phase !== 'playing') {
       return jsonResponse({ error: 'Game not in progress' }, 400);
@@ -660,19 +702,31 @@ export class GameRoom {
       return jsonResponse({ error: 'AI help is disabled for human roles' }, 403);
     }
 
-    // If confirming a pending clue
-    if (body.confirm) {
-      if (!this.pendingAIClueLoaded) {
-        const stored = await this.state.storage.get('pendingAIClue') as { clue: AIClueCandidate; team: Team } | null;
-        if (stored?.clue && stored?.team) {
-          this.pendingAIClue = stored.clue;
-          this.pendingAIClueTeam = stored.team;
-        }
-        this.pendingAIClueLoaded = true;
+    // Load any pending clue from storage once per instance.
+    if (!this.pendingAIClueLoaded) {
+      const stored = await this.state.storage.get('pendingAIClue') as { clue: AIClueCandidate; team: Team } | null;
+      if (stored?.clue && stored?.team) {
+        this.pendingAIClue = stored.clue;
+        this.pendingAIClueTeam = stored.team;
       }
+      this.pendingAIClueLoaded = true;
     }
 
-    if (body.confirm && this.pendingAIClue) {
+    // Debounce: if we already have a pending clue for this team/turn, return it instead of regenerating.
+    if (!body.confirm && this.pendingAIClue && this.pendingAIClueTeam === team) {
+      return jsonResponse({
+        clue: this.pendingAIClue,
+        message: 'AI generated a clue. Call with confirm=true to submit it.',
+        gameState: this.getPublicState(),
+      });
+    }
+
+    // If confirming a pending clue, do not generate a new one.
+    if (body.confirm) {
+      if (!this.pendingAIClue) {
+        return jsonResponse({ error: 'No pending AI clue to confirm' }, 409);
+      }
+
       if (this.pendingAIClueTeam && this.pendingAIClueTeam !== team) {
         // Turn advanced while the clue was pending; discard to avoid applying to wrong team.
         this.pendingAIClue = null;
@@ -719,20 +773,35 @@ export class GameRoom {
 
     // Generate a new AI clue
     try {
-      // Get the configured model, reasoning effort, and custom instructions for this team's spymaster
-      const modelKey = `${team}Spymaster` as keyof ModelConfig;
-      const model = this.gameState!.modelConfig[modelKey];
-      const reasoningEffort = this.gameState!.reasoningEffortConfig[modelKey];
-      const customInstructions = this.gameState!.customInstructionsConfig[modelKey];
+      if (!this.aiClueTask) {
+        this.aiClueTask = (async () => {
+          // Get the configured model, reasoning effort, and custom instructions for this team's spymaster
+          const modelKey = `${team}Spymaster` as keyof ModelConfig;
+          const model = this.gameState!.modelConfig[modelKey];
+          const reasoningEffort = this.gameState!.reasoningEffortConfig[modelKey];
+          const customInstructions = this.gameState!.customInstructionsConfig[modelKey];
 
-      const aiClue = await generateAIClue(
-        this.env.OPENAI_API_KEY,
-        this.gameState!,
-        team,
-        model,
-        reasoningEffort,
-        customInstructions
-      );
+          const aiClue = await generateAIClue(
+            apiKey,
+            this.gameState!,
+            team,
+            model,
+            reasoningEffort,
+            customInstructions
+          );
+
+          this.pendingAIClue = aiClue;
+          this.pendingAIClueTeam = team;
+          this.pendingAIClueLoaded = true;
+          await this.state.storage.put('pendingAIClue', { clue: aiClue, team });
+
+          return aiClue;
+        })().finally(() => {
+          this.aiClueTask = null;
+        });
+      }
+
+      const aiClue = await this.aiClueTask;
 
       this.pendingAIClue = aiClue;
       this.pendingAIClueTeam = team;
@@ -749,10 +818,11 @@ export class GameRoom {
     }
   }
 
-  private async handleAISuggest(request: Request): Promise<Response> {
+  private async handleAISuggest(_request: Request): Promise<Response> {
     if (!this.env.OPENAI_API_KEY) {
       return jsonResponse({ error: 'OpenAI API key not configured' }, 500);
     }
+    const apiKey = this.env.OPENAI_API_KEY;
 
     if (this.gameState!.phase !== 'playing') {
       return jsonResponse({ error: 'Game not in progress' }, 400);
@@ -769,22 +839,60 @@ export class GameRoom {
     }
 
     try {
+      const suggestSig = `${clue.team}|${clue.word}|${clue.number}|${this.gameState!.guessHistory.length}`;
+      const now = Date.now();
+
+      if (this.aiSuggestCache && this.aiSuggestCacheSig === suggestSig && now - this.aiSuggestCacheAt < 10000) {
+        return jsonResponse({
+          suggestions: this.aiSuggestCache.suggestions,
+          reasoning: this.aiSuggestCache.reasoning,
+          stopAfter: this.aiSuggestCache.stopAfter,
+          gameState: this.getPublicState(),
+        });
+      }
+
+      if (this.aiSuggestTask && this.aiSuggestSig === suggestSig) {
+        const cached = await this.aiSuggestTask;
+        return jsonResponse({
+          suggestions: cached.suggestions,
+          reasoning: cached.reasoning,
+          stopAfter: cached.stopAfter,
+          gameState: this.getPublicState(),
+        });
+      }
+
+      if (this.aiSuggestTask) {
+        return jsonResponse({ error: 'AI suggest already in progress' }, 409);
+      }
+
       // Get the configured model, reasoning effort, and custom instructions for this team's guesser
       const modelKey = `${clue.team}Guesser` as keyof ModelConfig;
       const model = this.gameState!.modelConfig[modelKey];
       const reasoningEffort = this.gameState!.reasoningEffortConfig[modelKey];
       const customInstructions = this.gameState!.customInstructionsConfig[modelKey];
 
-      const suggestions = await generateAIGuesses(
-        this.env.OPENAI_API_KEY,
-        this.gameState!,
-        clue.word,
-        clue.number,
-        clue.team,
-        model,
-        reasoningEffort,
-        customInstructions
-      );
+      this.aiSuggestSig = suggestSig;
+      this.aiSuggestTask = (async () => {
+        const suggestions = await generateAIGuesses(
+          apiKey,
+          this.gameState!,
+          clue.word,
+          clue.number,
+          clue.team,
+          model,
+          reasoningEffort,
+          customInstructions
+        );
+        this.aiSuggestCache = suggestions;
+        this.aiSuggestCacheSig = suggestSig;
+        this.aiSuggestCacheAt = Date.now();
+        return suggestions;
+      })().finally(() => {
+        this.aiSuggestTask = null;
+        this.aiSuggestSig = null;
+      });
+
+      const suggestions = await this.aiSuggestTask;
 
       return jsonResponse({
         suggestions: suggestions.suggestions,
@@ -801,6 +909,7 @@ export class GameRoom {
     if (!this.env.OPENAI_API_KEY) {
       return jsonResponse({ error: 'OpenAI API key not configured' }, 500);
     }
+    const apiKey = this.env.OPENAI_API_KEY;
 
     if (this.gameState!.phase !== 'playing') {
       return jsonResponse({ error: 'Game not in progress' }, 400);
@@ -823,6 +932,11 @@ export class GameRoom {
     }
 
     try {
+      if (this.aiPlayInFlight) {
+        return jsonResponse({ error: 'AI play already in progress' }, 409);
+      }
+      this.aiPlayInFlight = true;
+
       // Get the configured model, reasoning effort, and custom instructions for this team's guesser
       const modelKey = `${expectedClue.team}Guesser` as keyof ModelConfig;
       const model = this.gameState!.modelConfig[modelKey];
@@ -831,7 +945,7 @@ export class GameRoom {
 
       // Get AI suggestions
       const suggestions = await generateAIGuesses(
-        this.env.OPENAI_API_KEY,
+        apiKey,
         this.gameState!,
         expectedClue.word,
         expectedClue.number,
@@ -1052,6 +1166,8 @@ export class GameRoom {
       });
     } catch (error) {
       return jsonResponse({ error: String(error) }, 500);
+    } finally {
+      this.aiPlayInFlight = false;
     }
   }
 
@@ -1125,6 +1241,8 @@ export class GameRoom {
 
     // Start timing for next team's spymaster
     this.startPhaseTimer();
+    // Reset turn timer for new team's turn
+    this.gameState!.turnStartTime = Date.now();
 
     // Best-effort cleanup; don't block turn progression on storage
     this.state.storage.delete('pendingAIClue').catch(() => {});
@@ -1173,6 +1291,7 @@ export class GameRoom {
       showAIReasoning: gs.showAIReasoning,
       showSpymasterReasoning: gs.showSpymasterReasoning,
       assassinBehavior: gs.assassinBehavior,
+      turnTimer: gs.turnTimer,
       roleConfig: gs.roleConfig,
       modelConfig: gs.modelConfig,
       reasoningEffortConfig: gs.reasoningEffortConfig,
@@ -1191,6 +1310,7 @@ export class GameRoom {
       clueHistory: gs.clueHistory,
       guessHistory: gs.guessHistory,
       phaseStartTime: gs.phaseStartTime,
+      turnStartTime: gs.turnStartTime,
       timing: gs.timing,
     };
 

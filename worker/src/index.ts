@@ -410,6 +410,24 @@ app.post('/api/games/:code/set-assassin-behavior', async (c) => {
   return c.json(data, response.status as any);
 });
 
+// Set turn timer
+app.post('/api/games/:code/set-turn-timer', async (c) => {
+  const roomCode = c.req.param('code').toUpperCase();
+  const body = await c.req.json();
+
+  const id = c.env.GAME_ROOM.idFromName(roomCode);
+  const stub = c.env.GAME_ROOM.get(id);
+
+  const response = await stub.fetch(new Request('http://internal/set-turn-timer', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  }));
+
+  const data = await response.json();
+  return c.json(data, response.status as any);
+});
+
 // Get game history
 app.get('/api/history', async (c) => {
   try {

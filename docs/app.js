@@ -183,6 +183,56 @@ function LiveTimer({ phaseStartTime, accumulatedMs }) {
   return html`<span>${formatMs(total)}</span>`;
 }
 
+// Turn timer countdown component with auto-end-turn
+function TurnTimerCountdown({ turnStartTime, turnTimer, onTimeUp, isActive }) {
+  const [remaining, setRemaining] = useState(turnTimer ? turnTimer * 1000 : 0);
+  const [hasTriggered, setHasTriggered] = useState(false);
+
+  useEffect(() => {
+    // Reset triggered state when turn changes
+    setHasTriggered(false);
+  }, [turnStartTime]);
+
+  useEffect(() => {
+    if (!turnTimer || !turnStartTime || !isActive) {
+      setRemaining(turnTimer ? turnTimer * 1000 : 0);
+      return;
+    }
+
+    const update = () => {
+      const elapsed = Date.now() - turnStartTime;
+      const left = Math.max(0, (turnTimer * 1000) - elapsed);
+      setRemaining(left);
+
+      // Auto-end turn when timer hits 0
+      if (left === 0 && !hasTriggered && onTimeUp) {
+        setHasTriggered(true);
+        onTimeUp();
+      }
+    };
+
+    update();
+    const interval = setInterval(update, 1000);
+    return () => clearInterval(interval);
+  }, [turnStartTime, turnTimer, isActive, hasTriggered, onTimeUp]);
+
+  if (!turnTimer) return null;
+
+  const totalMs = turnTimer * 1000;
+  const percent = (remaining / totalMs) * 100;
+  const isLow = remaining <= 10000; // Last 10 seconds
+  const isWarning = remaining <= 30000 && remaining > 10000; // 10-30 seconds
+
+  return html`
+    <div class="turn-timer-countdown ${isLow ? 'low' : isWarning ? 'warning' : ''}">
+      <div class="timer-bar-container">
+        <div class="timer-bar" style="width: ${percent}%"></div>
+      </div>
+      <div class="timer-text">${formatMs(remaining)}</div>
+    </div>
+  `;
+}
+
 // Timing display for host view showing all team times
 function TimingDisplay({ gameState }) {
   const { timing, phaseStartTime, turnPhase, currentTeam, phase } = gameState;
@@ -497,6 +547,8 @@ function Setup({ gameState, onConfigure, onStart, onBack, error, roomCode }) {
 
   const [assassinBehavior, setAssassinBehavior] = useState(gameState?.assassinBehavior || 'instant_loss');
 
+  const [turnTimer, setTurnTimer] = useState(gameState?.turnTimer || null);
+
   // Sync roleConfig from server updates (e.g., when players join)
   useEffect(() => {
     if (gameState?.roleConfig) {
@@ -517,7 +569,11 @@ function Setup({ gameState, onConfigure, onStart, onBack, error, roomCode }) {
     if (gameState?.assassinBehavior) {
       setAssassinBehavior(gameState.assassinBehavior);
     }
-  }, [gameState?.roleConfig, gameState?.modelConfig, gameState?.reasoningEffortConfig, gameState?.customInstructionsConfig, gameState?.allowHumanAIHelp, gameState?.assassinBehavior]);
+    // turnTimer can be null, so check with 'in' operator
+    if ('turnTimer' in (gameState || {})) {
+      setTurnTimer(gameState.turnTimer);
+    }
+  }, [gameState?.roleConfig, gameState?.modelConfig, gameState?.reasoningEffortConfig, gameState?.customInstructionsConfig, gameState?.allowHumanAIHelp, gameState?.assassinBehavior, gameState?.turnTimer]);
 
   const updateRole = (role, value) => {
     const newRoleConfig = { ...roleConfig, [role]: value };
@@ -578,6 +634,18 @@ function Setup({ gameState, onConfigure, onStart, onBack, error, roomCode }) {
       });
     } catch (err) {
       console.error('Set assassin behavior error:', err);
+    }
+  };
+
+  const updateTurnTimer = async (timer) => {
+    setTurnTimer(timer);
+    try {
+      await api(`/api/games/${roomCode}/set-turn-timer`, {
+        method: 'POST',
+        body: JSON.stringify({ turnTimer: timer }),
+      });
+    } catch (err) {
+      console.error('Set turn timer error:', err);
     }
   };
 
@@ -686,6 +754,32 @@ function Setup({ gameState, onConfigure, onStart, onBack, error, roomCode }) {
               <div style="font-size: 0.85rem; color: var(--text-light);">Converts 2 neutral cards into your team's cards (more work for you).</div>
             </div>
           </label>
+        </div>
+      </div>
+
+      <div style="margin-bottom: 1rem; padding: 1rem; background: #f5f5f5; border-radius: 8px;">
+        <div style="font-weight: 600; margin-bottom: 0.75rem;">Turn Timer</div>
+        <div style="font-size: 0.85rem; color: var(--text-light); margin-bottom: 0.75rem;">
+          If enabled, each team's turn will automatically end when the timer expires.
+        </div>
+        <div style="display: flex; flex-wrap: wrap; gap: 0.75rem;">
+          ${[
+            { value: null, label: 'None' },
+            { value: 60, label: '1 min' },
+            { value: 120, label: '2 min' },
+            { value: 180, label: '3 min' },
+            { value: 240, label: '4 min' },
+          ].map(option => html`
+            <label style="display: flex; gap: 0.35rem; align-items: center; cursor: pointer;">
+              <input
+                type="radio"
+                name="turn-timer"
+                checked=${turnTimer === option.value}
+                onChange=${() => updateTurnTimer(option.value)}
+              />
+              <span>${option.label}</span>
+            </label>
+          `)}
         </div>
       </div>
 
@@ -1323,6 +1417,46 @@ function Game({ roomCode, player, isSpymaster, onLeave }) {
           <div class="winner-modal ${winner}" onClick=${(e) => e.stopPropagation()}>
             <button class="modal-close" onClick=${() => setShowWinnerModal(false)}>✕</button>
             <h2>${winner.toUpperCase()} WINS!</h2>
+
+            ${/* Team member display */ ''}
+            <div class="winner-teams">
+              ${['red', 'blue'].map(team => {
+                const isWinner = team === winner;
+                const spymasterKey = `${team}Spymaster`;
+                const guesserKey = `${team}Guesser`;
+                const isAISpymaster = gameState.roleConfig[spymasterKey] === 'ai';
+                const isAIGuesser = gameState.roleConfig[guesserKey] === 'ai';
+                const humanSpymaster = gameState.players?.find(p => p.team === team && p.role === 'spymaster');
+                const humanGuesser = gameState.players?.find(p => p.team === team && p.role === 'guesser');
+
+                return html`
+                  <div class="winner-team ${team} ${isWinner ? 'winning' : 'losing'}">
+                    <div class="winner-team-header">${isWinner ? '🏆' : ''} ${team.toUpperCase()} ${isWinner ? '🏆' : ''}</div>
+                    <div class="winner-team-members">
+                      <div class="member-row">
+                        <span class="member-role">Spymaster:</span>
+                        <span class="member-name">
+                          ${isAISpymaster
+                            ? html`<span class="ai-badge">🤖 ${gameState.modelConfig[spymasterKey]}</span>`
+                            : humanSpymaster?.name || 'Unknown'
+                          }
+                        </span>
+                      </div>
+                      <div class="member-row">
+                        <span class="member-role">Guesser:</span>
+                        <span class="member-name">
+                          ${isAIGuesser
+                            ? html`<span class="ai-badge">🤖 ${gameState.modelConfig[guesserKey]}</span>`
+                            : humanGuesser?.name || 'Unknown'
+                          }
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                `;
+              })}
+            </div>
+
             <div class="winner-actions">
               <button class="btn btn-outline" onClick=${() => setShowWinnerModal(false)}>View Board</button>
               <button class="btn btn-blue" onClick=${onLeave}>Back to Home</button>
@@ -1640,6 +1774,21 @@ function HostView({ roomCode, onLeave }) {
     }
   }, [gameState, aiLoading, aiActionPending, roomCode, fetchState]);
 
+  // Handle turn timer expiration - auto-end turn
+  const handleTurnTimeUp = useCallback(async () => {
+    if (!gameState || gameState.phase !== 'playing' || gameState.winner) return;
+
+    console.log('Turn timer expired, auto-ending turn');
+    try {
+      await api(`/api/games/${roomCode}/end-turn`, {
+        method: 'POST',
+      });
+      fetchState();
+    } catch (err) {
+      console.error('Auto end-turn error:', err);
+    }
+  }, [gameState, roomCode, fetchState]);
+
   if (!gameState) {
     return html`<div class="loading">Loading...</div>`;
   }
@@ -1716,6 +1865,46 @@ function HostView({ roomCode, onLeave }) {
           <div class="winner-modal ${winner}" onClick=${(e) => e.stopPropagation()}>
             <button class="modal-close" onClick=${() => setShowWinnerModal(false)}>✕</button>
             <h2>${winner.toUpperCase()} WINS!</h2>
+
+            ${/* Team member display */ ''}
+            <div class="winner-teams">
+              ${['red', 'blue'].map(team => {
+                const isWinner = team === winner;
+                const spymasterKey = `${team}Spymaster`;
+                const guesserKey = `${team}Guesser`;
+                const isAISpymaster = gameState.roleConfig[spymasterKey] === 'ai';
+                const isAIGuesser = gameState.roleConfig[guesserKey] === 'ai';
+                const humanSpymaster = gameState.players?.find(p => p.team === team && p.role === 'spymaster');
+                const humanGuesser = gameState.players?.find(p => p.team === team && p.role === 'guesser');
+
+                return html`
+                  <div class="winner-team ${team} ${isWinner ? 'winning' : 'losing'}">
+                    <div class="winner-team-header">${isWinner ? '🏆' : ''} ${team.toUpperCase()} ${isWinner ? '🏆' : ''}</div>
+                    <div class="winner-team-members">
+                      <div class="member-row">
+                        <span class="member-role">Spymaster:</span>
+                        <span class="member-name">
+                          ${isAISpymaster
+                            ? html`<span class="ai-badge">🤖 ${gameState.modelConfig[spymasterKey]}</span>`
+                            : humanSpymaster?.name || 'Unknown'
+                          }
+                        </span>
+                      </div>
+                      <div class="member-row">
+                        <span class="member-role">Guesser:</span>
+                        <span class="member-name">
+                          ${isAIGuesser
+                            ? html`<span class="ai-badge">🤖 ${gameState.modelConfig[guesserKey]}</span>`
+                            : humanGuesser?.name || 'Unknown'
+                          }
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                `;
+              })}
+            </div>
+
             <div class="winner-actions">
               <button class="btn btn-outline" onClick=${() => setShowWinnerModal(false)}>View Board</button>
               <button class="btn btn-blue" onClick=${onLeave}>New Game</button>
@@ -1746,6 +1935,15 @@ function HostView({ roomCode, onLeave }) {
       </div>
 
       <${TimingDisplay} gameState=${gameState} />
+
+      ${gameState.turnTimer && gameState.phase === 'playing' && !winner && html`
+        <${TurnTimerCountdown}
+          turnStartTime=${gameState.turnStartTime}
+          turnTimer=${gameState.turnTimer}
+          onTimeUp=${handleTurnTimeUp}
+          isActive=${gameState.phase === 'playing' && !winner}
+        />
+      `}
 
       ${aiLoading && (() => {
         // Determine which model is thinking based on game state

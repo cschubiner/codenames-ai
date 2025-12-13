@@ -2,7 +2,7 @@
  * AI integration for Codenames - OpenAI API calls
  */
 
-import { GameState, Team, CardType, AIClueCandidate, AIGuessResponse, AIGuessSuggestion } from './types';
+import { GameState, Team, AIClueCandidate, AIGuessResponse } from './types';
 
 interface OpenAIMessage {
   role: 'system' | 'user' | 'assistant';

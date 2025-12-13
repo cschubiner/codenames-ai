@@ -1084,3 +1084,132 @@ body {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.6; }
 }
+
+/* Turn Timer Countdown */
+.turn-timer-countdown {
+  max-width: 400px;
+  margin: 1rem auto;
+  text-align: center;
+}
+
+.timer-bar-container {
+  height: 12px;
+  background: #e0e0e0;
+  border-radius: 6px;
+  overflow: hidden;
+  margin-bottom: 0.5rem;
+}
+
+.timer-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #4caf50, #66bb6a);
+  border-radius: 6px;
+  transition: width 1s linear;
+}
+
+.turn-timer-countdown.warning .timer-bar {
+  background: linear-gradient(90deg, #ff9800, #ffb74d);
+}
+
+.turn-timer-countdown.low .timer-bar {
+  background: linear-gradient(90deg, #f44336, #ef5350);
+  animation: pulse 0.5s ease-in-out infinite;
+}
+
+.timer-text {
+  font-size: 1.5rem;
+  font-weight: 700;
+  font-family: 'Monaco', 'Consolas', monospace;
+  color: var(--text);
+}
+
+.turn-timer-countdown.warning .timer-text {
+  color: #ff9800;
+}
+
+.turn-timer-countdown.low .timer-text {
+  color: #f44336;
+  animation: pulse 0.5s ease-in-out infinite;
+}
+
+/* Winner Modal Team Display */
+.winner-teams {
+  display: flex;
+  gap: 1rem;
+  margin: 1.5rem 0;
+  justify-content: center;
+}
+
+.winner-team {
+  flex: 1;
+  max-width: 200px;
+  padding: 1rem;
+  border-radius: 8px;
+  text-align: left;
+}
+
+.winner-team.red {
+  background: rgba(244, 67, 54, 0.1);
+  border: 2px solid var(--red);
+}
+
+.winner-team.blue {
+  background: rgba(25, 118, 210, 0.1);
+  border: 2px solid var(--blue);
+}
+
+.winner-team.winning {
+  box-shadow: 0 0 20px rgba(255, 193, 7, 0.5);
+}
+
+.winner-team.losing {
+  opacity: 0.7;
+}
+
+.winner-team-header {
+  font-weight: 700;
+  text-align: center;
+  margin-bottom: 0.75rem;
+  font-size: 1rem;
+}
+
+.winner-team.red .winner-team-header {
+  color: var(--red);
+}
+
+.winner-team.blue .winner-team-header {
+  color: var(--blue);
+}
+
+.winner-team-members {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.member-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.member-role {
+  font-size: 0.7rem;
+  color: var(--text-light);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.member-name {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.ai-badge {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.8rem;
+}

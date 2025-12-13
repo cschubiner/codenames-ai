@@ -26,6 +26,9 @@ export type ReasoningEffort = 'none' | 'low' | 'medium' | 'high' | 'xhigh';
 // Assassin behavior modes
 export type AssassinBehavior = 'instant_loss' | 'reveal_opponent' | 'add_own_cards';
 
+// Turn timer options (in seconds, null = no timer)
+export type TurnTimerSetting = 60 | 120 | 180 | 240 | null;
+
 export interface ReasoningEffortConfig {
   redSpymaster?: ReasoningEffort;
   redGuesser?: ReasoningEffort;
@@ -77,6 +80,7 @@ export interface GameState {
   showAIReasoning: boolean;
   showSpymasterReasoning: boolean;
   assassinBehavior: AssassinBehavior;
+  turnTimer: TurnTimerSetting;
 
   // Role configuration
   roleConfig: RoleConfig;
@@ -109,6 +113,7 @@ export interface GameState {
 
   // Timing tracking
   phaseStartTime: number | null; // When current phase (clue/guess) started
+  turnStartTime: number | null; // When current team's turn started (for turn timer)
   timing: {
     red: { spymasterMs: number; guesserMs: number };
     blue: { spymasterMs: number; guesserMs: number };
@@ -156,13 +161,11 @@ export interface AIClueRequest {
   confirm?: boolean;
 }
 
-export interface AISuggestRequest {
-  // No params needed
-}
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
+export interface AISuggestRequest {}
 
-export interface AIPlayRequest {
-  // No params needed
-}
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
+export interface AIPlayRequest {}
 
 // Public game state (filtered based on viewer's role)
 export interface PublicGameState {
@@ -172,6 +175,7 @@ export interface PublicGameState {
   showAIReasoning: boolean;
   showSpymasterReasoning: boolean;
   assassinBehavior: AssassinBehavior;
+  turnTimer: TurnTimerSetting;
   roleConfig: RoleConfig;
   modelConfig: ModelConfig;
   reasoningEffortConfig: ReasoningEffortConfig;
@@ -192,6 +196,7 @@ export interface PublicGameState {
   guessHistory: Array<{ word: string; cardType: CardType; team: Team }>;
   // Timing info
   phaseStartTime: number | null;
+  turnStartTime: number | null; // When the current team's turn started (for turn timer)
   timing: {
     red: { spymasterMs: number; guesserMs: number };
     blue: { spymasterMs: number; guesserMs: number };
