@@ -1791,21 +1791,31 @@ export class GameRoom {
     const redTurns = gs.clueHistory.filter(c => c.team === 'red').length;
     const blueTurns = gs.clueHistory.filter(c => c.team === 'blue').length;
 
-    // Build team configs
+    // Build team configs with full multi-model support
     const buildTeamConfig = (team: Team) => {
       const spymasterKey = `${team}Spymaster` as keyof typeof gs.roleConfig;
       const guesserKey = `${team}Guesser` as keyof typeof gs.roleConfig;
 
+      // Get model entries from multiModelConfig
+      const spymasterModels = gs.multiModelConfig[spymasterKey] || [];
+      const guesserModels = gs.multiModelConfig[guesserKey] || [];
+
       return {
         spymaster: {
           type: gs.roleConfig[spymasterKey],
+          // Keep legacy fields for backwards compatibility
           model: gs.modelConfig[spymasterKey],
           reasoning: gs.reasoningEffortConfig[spymasterKey] || null,
+          // New multi-model array
+          models: spymasterModels,
         },
         guesser: {
           type: gs.roleConfig[guesserKey],
+          // Keep legacy fields for backwards compatibility
           model: gs.modelConfig[guesserKey],
           reasoning: gs.reasoningEffortConfig[guesserKey] || null,
+          // New multi-model array
+          models: guesserModels,
         },
       };
     };

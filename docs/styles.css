@@ -944,6 +944,73 @@ body {
   color: var(--text-light);
 }
 
+/* Matchup display for models (visible at top level) */
+.history-matchup {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.75rem 0;
+  padding: 0.5rem;
+  background: rgba(0,0,0,0.02);
+  border-radius: 6px;
+}
+
+.matchup-team {
+  flex: 1;
+  min-width: 0;
+}
+
+.matchup-team.red {
+  text-align: left;
+}
+
+.matchup-team.blue {
+  text-align: right;
+}
+
+.matchup-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text-light);
+  margin-bottom: 0.25rem;
+}
+
+.matchup-team.red .matchup-label {
+  color: var(--red);
+}
+
+.matchup-team.blue .matchup-label {
+  color: var(--blue);
+}
+
+.matchup-models {
+  font-size: 0.75rem;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.model-role {
+  color: var(--text-light);
+  font-weight: 500;
+}
+
+.model-name {
+  color: var(--text);
+  font-weight: 400;
+}
+
+.matchup-vs {
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: var(--text-light);
+  text-transform: uppercase;
+  padding: 0 0.25rem;
+  flex-shrink: 0;
+}
+
 .history-details {
   margin-top: 0.75rem;
   padding-top: 0.75rem;

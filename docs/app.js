@@ -354,25 +354,72 @@ function GameHistory() {
     fetchHistory();
   }, []);
 
-  const getTeamConfigDisplay = (config) => {
-    const parts = [];
-    if (config.spymaster) {
-      const sm = config.spymaster;
-      if (sm.type === 'ai') {
-        parts.push(`SM: ${sm.model || 'AI'}${sm.reasoning ? ` (${sm.reasoning})` : ''}`);
-      } else {
-        parts.push('SM: Human');
-      }
+  // Get a concise model list for display (handles both legacy single model and new multi-model)
+  const getModelList = (roleConfig) => {
+    if (!roleConfig) return [];
+    if (roleConfig.type === 'human') return ['Human'];
+
+    // Check for new multi-model array
+    if (roleConfig.models && Array.isArray(roleConfig.models) && roleConfig.models.length > 0) {
+      return roleConfig.models.map(m => m.model);
     }
-    if (config.guesser) {
-      const g = config.guesser;
-      if (g.type === 'ai') {
-        parts.push(`G: ${g.model || 'AI'}${g.reasoning ? ` (${g.reasoning})` : ''}`);
-      } else {
-        parts.push('G: Human');
-      }
+
+    // Fall back to legacy single model
+    if (roleConfig.model) {
+      return [roleConfig.model];
     }
-    return parts.join(', ');
+
+    return ['AI'];
+  };
+
+  // Format model list for display (compact)
+  const formatModelList = (models) => {
+    if (models.length === 0) return '?';
+    if (models.length === 1) return models[0];
+    // For multiple models, show count
+    const uniqueModels = [...new Set(models)];
+    if (uniqueModels.length === 1) return `${uniqueModels[0]} (×${models.length})`;
+    return `${uniqueModels.length} models`;
+  };
+
+  // Get team summary for top-level display (concise)
+  const getTeamSummary = (config) => {
+    const smModels = getModelList(config?.spymaster);
+    const gModels = getModelList(config?.guesser);
+
+    const smDisplay = smModels[0] === 'Human' ? 'Human' : formatModelList(smModels);
+    const gDisplay = gModels[0] === 'Human' ? 'Human' : formatModelList(gModels);
+
+    return { spymaster: smDisplay, guesser: gDisplay };
+  };
+
+  // Get detailed model display for expanded view
+  const getDetailedModelDisplay = (roleConfig, roleName) => {
+    if (!roleConfig) return html`<span>${roleName}: Unknown</span>`;
+    if (roleConfig.type === 'human') return html`<span>${roleName}: Human</span>`;
+
+    const models = roleConfig.models && Array.isArray(roleConfig.models) && roleConfig.models.length > 0
+      ? roleConfig.models
+      : roleConfig.model ? [{ model: roleConfig.model, reasoningEffort: roleConfig.reasoning }] : [];
+
+    if (models.length === 0) return html`<span>${roleName}: AI</span>`;
+
+    if (models.length === 1) {
+      const m = models[0];
+      return html`<span>${roleName}: ${m.model}${m.reasoningEffort ? ` (${m.reasoningEffort})` : ''}</span>`;
+    }
+
+    // Multiple models
+    return html`
+      <div>
+        <span>${roleName}: ${models.length} models</span>
+        <ul style="margin: 0.25rem 0 0 1rem; padding: 0; list-style: disc;">
+          ${models.map(m => html`
+            <li style="font-size: 0.85em;">${m.model}${m.reasoningEffort ? ` (${m.reasoningEffort})` : ''}</li>
+          `)}
+        </ul>
+      </div>
+    `;
   };
 
   const getEndReasonDisplay = (reason, winner) => {
@@ -396,104 +443,135 @@ function GameHistory() {
     <div class="game-history">
       <h2>Game History</h2>
       <div class="history-list">
-        ${history.map((game, idx) => html`
-          <div
-            class="history-card ${game.winner}"
-            onClick=${() => setExpanded(expanded === idx ? null : idx)}
-          >
-            <div class="history-header">
-              <span class="winner-badge ${game.winner}">
-                ${game.winner === 'red' ? '🔴 RED' : '🔵 BLUE'} WINS
-              </span>
-              <span class="history-date">${formatDate(game.finishedAt)}</span>
-            </div>
+        ${history.map((game, idx) => {
+          const redSummary = getTeamSummary(game.redConfig);
+          const blueSummary = getTeamSummary(game.blueConfig);
 
-            <div class="history-summary">
-              <div class="history-score">
-                <span class="score-team red">${9 - game.redFinalScore}</span>
-                <span class="score-divider">-</span>
-                <span class="score-team blue">${8 - game.blueFinalScore}</span>
-                <span class="score-label">found</span>
+          return html`
+            <div
+              class="history-card ${game.winner}"
+              onClick=${() => setExpanded(expanded === idx ? null : idx)}
+            >
+              <div class="history-header">
+                <span class="winner-badge ${game.winner}">
+                  ${game.winner === 'red' ? '🔴 RED' : '🔵 BLUE'} WINS
+                </span>
+                <span class="history-date">${formatDate(game.finishedAt)}</span>
               </div>
-              <div class="history-stats-brief">
-                <span>${game.totalTurns} turns</span>
-                <span>${formatDuration(game.durationSeconds)}</span>
-              </div>
-            </div>
 
-            ${expanded === idx && html`
-              <div class="history-details">
-                <div class="team-details red">
-                  <h4>🔴 Red Team</h4>
-                  <div class="detail-row">
-                    <span class="detail-label">Config:</span>
-                    <span class="detail-value">${getTeamConfigDisplay(game.redConfig)}</span>
+              <div class="history-matchup">
+                <div class="matchup-team red">
+                  <div class="matchup-label">🔴 Red</div>
+                  <div class="matchup-models">
+                    <span class="model-role">SM:</span> <span class="model-name">${redSummary.spymaster}</span>
                   </div>
-                  ${game.redPlayers.length > 0 && html`
+                  <div class="matchup-models">
+                    <span class="model-role">G:</span> <span class="model-name">${redSummary.guesser}</span>
+                  </div>
+                </div>
+                <div class="matchup-vs">vs</div>
+                <div class="matchup-team blue">
+                  <div class="matchup-label">🔵 Blue</div>
+                  <div class="matchup-models">
+                    <span class="model-role">SM:</span> <span class="model-name">${blueSummary.spymaster}</span>
+                  </div>
+                  <div class="matchup-models">
+                    <span class="model-role">G:</span> <span class="model-name">${blueSummary.guesser}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="history-summary">
+                <div class="history-score">
+                  <span class="score-team red">${9 - game.redFinalScore}</span>
+                  <span class="score-divider">-</span>
+                  <span class="score-team blue">${8 - game.blueFinalScore}</span>
+                  <span class="score-label">found</span>
+                </div>
+                <div class="history-stats-brief">
+                  <span>${game.totalTurns} turns</span>
+                  <span>${formatDuration(game.durationSeconds)}</span>
+                </div>
+              </div>
+
+              ${expanded === idx && html`
+                <div class="history-details">
+                  <div class="team-details red">
+                    <h4>🔴 Red Team</h4>
                     <div class="detail-row">
-                      <span class="detail-label">Players:</span>
-                      <span class="detail-value">${game.redPlayers.join(', ')}</span>
+                      ${getDetailedModelDisplay(game.redConfig?.spymaster, 'Spymaster')}
                     </div>
-                  `}
-                  <div class="detail-row">
-                    <span class="detail-label">Clues:</span>
-                    <span class="detail-value">
-                      ${game.redClueStats.count} clues, avg ${game.redClueStats.avgNumber.toFixed(1)}
-                      ${game.redClueStats.stdNumber > 0 ? ` (±${game.redClueStats.stdNumber.toFixed(1)})` : ''}
-                    </span>
-                  </div>
-                  ${game.timingStats?.red && html`
                     <div class="detail-row">
-                      <span class="detail-label">Time:</span>
+                      ${getDetailedModelDisplay(game.redConfig?.guesser, 'Guesser')}
+                    </div>
+                    ${game.redPlayers.length > 0 && html`
+                      <div class="detail-row">
+                        <span class="detail-label">Players:</span>
+                        <span class="detail-value">${game.redPlayers.join(', ')}</span>
+                      </div>
+                    `}
+                    <div class="detail-row">
+                      <span class="detail-label">Clues:</span>
                       <span class="detail-value">
-                        SM: ${formatMs(game.timingStats.red.spymasterMs)},
-                        G: ${formatMs(game.timingStats.red.guesserMs)}
-                        (Total: ${formatMs(game.timingStats.red.spymasterMs + game.timingStats.red.guesserMs)})
+                        ${game.redClueStats.count} clues, avg ${game.redClueStats.avgNumber.toFixed(1)}
+                        ${game.redClueStats.stdNumber > 0 ? ` (±${game.redClueStats.stdNumber.toFixed(1)})` : ''}
                       </span>
                     </div>
-                  `}
-                </div>
+                    ${game.timingStats?.red && html`
+                      <div class="detail-row">
+                        <span class="detail-label">Time:</span>
+                        <span class="detail-value">
+                          SM: ${formatMs(game.timingStats.red.spymasterMs)},
+                          G: ${formatMs(game.timingStats.red.guesserMs)}
+                          (Total: ${formatMs(game.timingStats.red.spymasterMs + game.timingStats.red.guesserMs)})
+                        </span>
+                      </div>
+                    `}
+                  </div>
 
-                <div class="team-details blue">
-                  <h4>🔵 Blue Team</h4>
-                  <div class="detail-row">
-                    <span class="detail-label">Config:</span>
-                    <span class="detail-value">${getTeamConfigDisplay(game.blueConfig)}</span>
-                  </div>
-                  ${game.bluePlayers.length > 0 && html`
+                  <div class="team-details blue">
+                    <h4>🔵 Blue Team</h4>
                     <div class="detail-row">
-                      <span class="detail-label">Players:</span>
-                      <span class="detail-value">${game.bluePlayers.join(', ')}</span>
+                      ${getDetailedModelDisplay(game.blueConfig?.spymaster, 'Spymaster')}
                     </div>
-                  `}
-                  <div class="detail-row">
-                    <span class="detail-label">Clues:</span>
-                    <span class="detail-value">
-                      ${game.blueClueStats.count} clues, avg ${game.blueClueStats.avgNumber.toFixed(1)}
-                      ${game.blueClueStats.stdNumber > 0 ? ` (±${game.blueClueStats.stdNumber.toFixed(1)})` : ''}
-                    </span>
-                  </div>
-                  ${game.timingStats?.blue && html`
                     <div class="detail-row">
-                      <span class="detail-label">Time:</span>
+                      ${getDetailedModelDisplay(game.blueConfig?.guesser, 'Guesser')}
+                    </div>
+                    ${game.bluePlayers.length > 0 && html`
+                      <div class="detail-row">
+                        <span class="detail-label">Players:</span>
+                        <span class="detail-value">${game.bluePlayers.join(', ')}</span>
+                      </div>
+                    `}
+                    <div class="detail-row">
+                      <span class="detail-label">Clues:</span>
                       <span class="detail-value">
-                        SM: ${formatMs(game.timingStats.blue.spymasterMs)},
-                        G: ${formatMs(game.timingStats.blue.guesserMs)}
-                        (Total: ${formatMs(game.timingStats.blue.spymasterMs + game.timingStats.blue.guesserMs)})
+                        ${game.blueClueStats.count} clues, avg ${game.blueClueStats.avgNumber.toFixed(1)}
+                        ${game.blueClueStats.stdNumber > 0 ? ` (±${game.blueClueStats.stdNumber.toFixed(1)})` : ''}
                       </span>
                     </div>
-                  `}
-                </div>
+                    ${game.timingStats?.blue && html`
+                      <div class="detail-row">
+                        <span class="detail-label">Time:</span>
+                        <span class="detail-value">
+                          SM: ${formatMs(game.timingStats.blue.spymasterMs)},
+                          G: ${formatMs(game.timingStats.blue.guesserMs)}
+                          (Total: ${formatMs(game.timingStats.blue.spymasterMs + game.timingStats.blue.guesserMs)})
+                        </span>
+                      </div>
+                    `}
+                  </div>
 
-                <div class="end-reason">
-                  ${getEndReasonDisplay(game.endReason, game.winner)}
+                  <div class="end-reason">
+                    ${getEndReasonDisplay(game.endReason, game.winner)}
+                  </div>
                 </div>
-              </div>
-            `}
+              `}
 
-            <div class="expand-hint">${expanded === idx ? '▲ Less' : '▼ More'}</div>
-          </div>
-        `)}
+              <div class="expand-hint">${expanded === idx ? '▲ Less' : '▼ More'}</div>
+            </div>
+          `;
+        })}
       </div>
     </div>
   `;
