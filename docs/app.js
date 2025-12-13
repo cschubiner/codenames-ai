@@ -1336,6 +1336,33 @@ function HostView({ roomCode, onLeave }) {
         canGuess=${false}
         onGuess=${() => {}}
       />
+
+      <div class="history" style="max-width: 900px; margin: 2rem auto;">
+        <h3>Clue History</h3>
+        ${gameState.clueHistory.map(clue => {
+          const aiReasoning = clue.guesses?.find(g => g.aiReasoning)?.aiReasoning;
+          return html`
+            <div class="history-item">
+              <div class="history-row">
+                <span class="team-badge ${clue.team}">${clue.team}</span>
+                <strong>${clue.word}</strong> ${clue.number}
+              </div>
+              ${clue.guesses?.length ? html`
+                <div class="history-guesses">
+                  ${clue.guesses.map(g => html`
+                    <span class="guess-chip ${g.cardType}">${g.word}</span>
+                  `)}
+                </div>
+              ` : null}
+              ${aiReasoning ? html`
+                <div class="ai-reasoning" style="margin-top: 0.5rem; padding: 0.5rem; background: #f5f5f5; border-radius: 4px; font-size: 0.8rem; color: #666;">
+                  <strong>AI reasoning:</strong> ${aiReasoning}
+                </div>
+              ` : null}
+            </div>
+          `;
+        })}
+      </div>
     </div>
   `;
 }
