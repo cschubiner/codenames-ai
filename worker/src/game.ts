@@ -29,6 +29,7 @@ export class GameRoom {
   private env: Env;
   private gameState: GameState | null = null;
   private pendingAIClue: AIClueCandidate | null = null;
+  private pendingAIClueTeam: Team | null = null;
 
   constructor(state: DurableObjectState, env: Env) {
     this.state = state;
@@ -417,6 +418,13 @@ export class GameRoom {
 
     // If confirming a pending clue
     if (body.confirm && this.pendingAIClue) {
+      if (this.pendingAIClueTeam && this.pendingAIClueTeam !== team) {
+        // Turn advanced while the clue was pending; discard to avoid applying to wrong team.
+        this.pendingAIClue = null;
+        this.pendingAIClueTeam = null;
+        return jsonResponse({ error: 'Pending AI clue is stale (turn advanced)' }, 409);
+      }
+
       const clue: Clue = {
         word: this.pendingAIClue.clue,
         number: this.pendingAIClue.number,
@@ -431,6 +439,7 @@ export class GameRoom {
 
       const confirmedClue = this.pendingAIClue;
       this.pendingAIClue = null;
+      this.pendingAIClueTeam = null;
 
       await this.saveState();
 
@@ -455,6 +464,7 @@ export class GameRoom {
       );
 
       this.pendingAIClue = aiClue;
+      this.pendingAIClueTeam = team;
 
       return jsonResponse({
         clue: aiClue,
@@ -523,22 +533,37 @@ export class GameRoom {
       return jsonResponse({ error: 'No guesses remaining' }, 400);
     }
 
-    const clue = this.gameState!.currentClue;
+    const expectedTeam = this.gameState!.currentTeam;
+    const expectedClue = this.gameState!.currentClue;
+    const expectedClueSig = `${expectedClue.team}|${expectedClue.word}|${expectedClue.number}`;
 
     try {
       // Get the configured model for this team's guesser
-      const modelKey = `${clue.team}Guesser` as keyof typeof this.gameState.modelConfig;
+      const modelKey = `${expectedClue.team}Guesser` as keyof typeof this.gameState.modelConfig;
       const model = this.gameState!.modelConfig[modelKey];
 
       // Get AI suggestions
       const suggestions = await generateAIGuesses(
         this.env.OPENAI_API_KEY,
         this.gameState!,
-        clue.word,
-        clue.number,
-        clue.team,
+        expectedClue.word,
+        expectedClue.number,
+        expectedClue.team,
         model
       );
+
+      // If the turn advanced while we were waiting on OpenAI, don't apply a stale guess.
+      const currentClue = this.gameState!.currentClue;
+      const currentClueSig = currentClue ? `${currentClue.team}|${currentClue.word}|${currentClue.number}` : null;
+      if (
+        this.gameState!.phase !== 'playing' ||
+        !currentClue ||
+        this.gameState!.currentTeam !== expectedTeam ||
+        currentClueSig !== expectedClueSig ||
+        this.gameState!.guessesRemaining <= 0
+      ) {
+        return jsonResponse({ error: 'AI guess is stale (turn advanced)' }, 409);
+      }
 
       if (suggestions.suggestions.length === 0) {
         return jsonResponse({ error: 'AI could not generate a guess' }, 500);
@@ -641,6 +666,8 @@ export class GameRoom {
     this.gameState!.currentTeam = this.gameState!.currentTeam === 'red' ? 'blue' : 'red';
     this.gameState!.currentClue = null;
     this.gameState!.guessesRemaining = 0;
+    this.pendingAIClue = null;
+    this.pendingAIClueTeam = null;
   }
 
   private generateBoard(): string[] {
