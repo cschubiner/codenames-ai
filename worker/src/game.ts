@@ -84,6 +84,10 @@ export class GameRoom {
         return this.handleEndTurn();
       }
 
+      if (method === 'POST' && path === '/kick') {
+        return this.handleKick(request);
+      }
+
       if (method === 'POST' && path === '/ai-clue') {
         return this.handleAIClue(request);
       }
@@ -416,6 +420,26 @@ export class GameRoom {
     this.gameState!.updatedAt = Date.now();
 
     await this.saveState();
+
+    return jsonResponse({ gameState: this.getPublicState() });
+  }
+
+  private async handleKick(request: Request): Promise<Response> {
+    const body = await request.json() as { team: Team; role: RoleType };
+    const team = body?.team;
+    const role = body?.role;
+
+    if ((team !== 'red' && team !== 'blue') || (role !== 'spymaster' && role !== 'guesser')) {
+      return jsonResponse({ error: 'Invalid team/role' }, 400);
+    }
+
+    const beforeCount = this.gameState!.players.length;
+    this.gameState!.players = this.gameState!.players.filter(p => !(p.team === team && p.role === role));
+
+    if (this.gameState!.players.length !== beforeCount) {
+      this.gameState!.updatedAt = Date.now();
+      await this.saveState();
+    }
 
     return jsonResponse({ gameState: this.getPublicState() });
   }

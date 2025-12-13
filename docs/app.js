@@ -185,6 +185,17 @@ function Setup({ gameState, onConfigure, onStart, onBack, error, roomCode }) {
     onConfigure({ roleConfig, modelConfig, allowHumanAIHelp: value });
   };
 
+  const kickSeat = async (team, role) => {
+    try {
+      await api(`/api/games/${roomCode}/kick`, {
+        method: 'POST',
+        body: JSON.stringify({ team, role }),
+      });
+    } catch (err) {
+      console.error('Kick seat error:', err);
+    }
+  };
+
   const roles = [
     { key: 'redSpymaster', label: 'Red Spymaster', team: 'red', type: 'spymaster' },
     { key: 'redGuesser', label: 'Red Guesser', team: 'red', type: 'guesser' },
@@ -261,6 +272,26 @@ function Setup({ gameState, onConfigure, onStart, onBack, error, roomCode }) {
                 AI
               </label>
             </div>
+            ${(() => {
+              const isHumanSeat = roleConfig[role.key] === 'human';
+              if (!isHumanSeat) return null;
+              const occupant = gameState?.players?.find(p => p.team === role.team && p.role === role.type) || null;
+              return html`
+                <div style="margin-top: 0.75rem; display: flex; justify-content: space-between; align-items: center; gap: 0.75rem;">
+                  <div style="font-size: 0.9rem; color: var(--text-light);">
+                    ${occupant ? html`Joined: <strong style="color: var(--text);">${occupant.name}</strong>` : 'Empty'}
+                  </div>
+                  <button
+                    class="btn btn-outline btn-small"
+                    disabled=${!occupant}
+                    onClick=${() => kickSeat(role.team, role.type)}
+                    title="Free this seat so the player can rejoin"
+                  >
+                    Reset Seat
+                  </button>
+                </div>
+              `;
+            })()}
             ${roleConfig[role.key] === 'ai' && html`
               <div style="margin-top: 0.5rem;">
                 <label style="font-size: 0.8rem; color: var(--text-light);">Model:</label>
@@ -980,6 +1011,7 @@ function HostView({ roomCode, onLeave }) {
   const [aiLoading, setAiLoading] = useState(false);
   const [aiActionPending, setAiActionPending] = useState(false);
   const [showWinnerModal, setShowWinnerModal] = useState(true);
+  const [showAdmin, setShowAdmin] = useState(false);
 
   const fetchState = useCallback(async () => {
     try {
@@ -995,6 +1027,18 @@ function HostView({ roomCode, onLeave }) {
     const interval = setInterval(fetchState, 2000);
     return () => clearInterval(interval);
   }, [fetchState]);
+
+  const kickSeat = async (team, role) => {
+    try {
+      await api(`/api/games/${roomCode}/kick`, {
+        method: 'POST',
+        body: JSON.stringify({ team, role }),
+      });
+      fetchState();
+    } catch (err) {
+      console.error('Kick seat error:', err);
+    }
+  };
 
   // Auto-trigger AI actions for host view
   useEffect(() => {
@@ -1071,7 +1115,47 @@ function HostView({ roomCode, onLeave }) {
       <div class="header">
         <h1>Codenames AI</h1>
         <div style="font-size: 2rem;">Room: <strong>${roomCode}</strong></div>
+        <div style="margin-top: 0.75rem;">
+          <button class="btn btn-outline btn-small" onClick=${() => setShowAdmin(!showAdmin)}>
+            ${showAdmin ? 'Hide Admin' : 'Show Admin'}
+          </button>
+        </div>
       </div>
+
+      ${showAdmin && html`
+        <div style="max-width: 900px; margin: 1rem auto; padding: 1rem; background: rgba(255,255,255,0.92); border: 2px solid var(--border); border-radius: 12px;">
+          <h3 style="margin: 0 0 0.75rem 0;">Reset Seats</h3>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+            ${[
+              { team: 'red', role: 'spymaster', label: 'Red Spymaster' },
+              { team: 'red', role: 'guesser', label: 'Red Guesser' },
+              { team: 'blue', role: 'spymaster', label: 'Blue Spymaster' },
+              { team: 'blue', role: 'guesser', label: 'Blue Guesser' },
+            ].map(seat => {
+              const roleKey = `${seat.team}${seat.role.charAt(0).toUpperCase()}${seat.role.slice(1)}`;
+              if (gameState.roleConfig?.[roleKey] !== 'human') return null;
+              const occupant = gameState.players?.find(p => p.team === seat.team && p.role === seat.role);
+              return html`
+                <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.75rem; padding: 0.75rem; border: 1px solid var(--border); border-radius: 10px;">
+                  <div>
+                    <div style="font-weight: 700; color: var(--${seat.team});">${seat.label}</div>
+                    <div style="color: var(--text-light); font-size: 0.95rem;">
+                      ${occupant ? `Joined: ${occupant.name}` : 'Empty'}
+                    </div>
+                  </div>
+                  <button
+                    class="btn btn-outline btn-small"
+                    disabled=${!occupant}
+                    onClick=${() => kickSeat(seat.team, seat.role)}
+                  >
+                    Reset Seat
+                  </button>
+                </div>
+              `;
+            })}
+          </div>
+        </div>
+      `}
 
       ${winner && showWinnerModal && html`
         <div class="winner-overlay" onClick=${() => setShowWinnerModal(false)}>
