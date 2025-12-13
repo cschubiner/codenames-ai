@@ -1,6 +1,6 @@
 // Codenames AI - Frontend Application
 import { h, render } from 'https://esm.sh/preact@10.19.3';
-import { useState, useEffect, useCallback } from 'https://esm.sh/preact@10.19.3/hooks';
+import { useState, useEffect, useCallback, useRef } from 'https://esm.sh/preact@10.19.3/hooks';
 import htm from 'https://esm.sh/htm@3.1.1';
 
 const html = htm.bind(h);
@@ -1395,6 +1395,7 @@ function Game({ roomCode, player, isSpymaster, onLeave }) {
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showWinnerModal, setShowWinnerModal] = useState(true);
+  const lastCreatedAtRef = useRef(null);
 
   const fetchState = useCallback(async () => {
     try {
@@ -1418,6 +1419,24 @@ function Game({ roomCode, player, isSpymaster, onLeave }) {
   const [aiLoading, setAiLoading] = useState(false);
   const [aiClueRequested, setAiClueRequested] = useState(false);
   const [aiGuessRequested, setAiGuessRequested] = useState(false);
+
+  // When a new game starts in the same room (Play Again), reset local AI request state.
+  useEffect(() => {
+    if (!gameState?.createdAt) return;
+    if (lastCreatedAtRef.current === null) {
+      lastCreatedAtRef.current = gameState.createdAt;
+      return;
+    }
+    if (lastCreatedAtRef.current !== gameState.createdAt) {
+      lastCreatedAtRef.current = gameState.createdAt;
+      setAiClue(null);
+      setAiSuggestions(null);
+      setAiLoading(false);
+      setAiClueRequested(false);
+      setAiGuessRequested(false);
+      setShowWinnerModal(true);
+    }
+  }, [gameState?.createdAt]);
 
   // Auto-trigger AI actions
   // - Always trigger AI spymaster for current team (needed for clues)
@@ -1881,6 +1900,7 @@ function HostView({ roomCode, onLeave, onReplay }) {
   const [showWinnerModal, setShowWinnerModal] = useState(true);
   const [showAdmin, setShowAdmin] = useState(false);
   const [playAgainLoading, setPlayAgainLoading] = useState(false);
+  const lastCreatedAtRef = useRef(null);
 
   const fetchState = useCallback(async () => {
     try {
@@ -1895,6 +1915,21 @@ function HostView({ roomCode, onLeave, onReplay }) {
     fetchState();
     return startAdaptivePolling(fetchState, 4000, 15000);
   }, [fetchState]);
+
+  // When a new game starts in the same room (Play Again), clear any lingering local AI locks.
+  useEffect(() => {
+    if (!gameState?.createdAt) return;
+    if (lastCreatedAtRef.current === null) {
+      lastCreatedAtRef.current = gameState.createdAt;
+      return;
+    }
+    if (lastCreatedAtRef.current !== gameState.createdAt) {
+      lastCreatedAtRef.current = gameState.createdAt;
+      setAiLoading(false);
+      setAiActionPending(false);
+      setShowWinnerModal(true);
+    }
+  }, [gameState?.createdAt]);
 
   const kickSeat = async (team, role) => {
     try {
@@ -2084,12 +2119,7 @@ function HostView({ roomCode, onLeave, onReplay }) {
       const data = await api(`/api/games/${roomCode}/replay`, {
         method: 'POST',
       });
-      if (data.newRoomCode) {
-        // Redirect to the new game - call onReplay with new room code
-        if (onReplay) {
-          onReplay(data.newRoomCode, data.players);
-        }
-      }
+      if (data.gameState) setGameState(data.gameState);
     } catch (err) {
       console.error('Play again error:', err);
       alert('Failed to create new game: ' + err.message);

@@ -166,6 +166,10 @@ export class GameRoom {
         return this.handleGetReplaySettings();
       }
 
+      if (method === 'POST' && path === '/replay') {
+        return this.handleReplay();
+      }
+
       // Background mode endpoints for long-running AI models
       if (method === 'GET' && path === '/ai-clue-status') {
         return this.handleAIClueStatus();
@@ -912,6 +916,72 @@ export class GameRoom {
       },
       players: gs.players,
     });
+  }
+
+  private async handleReplay(): Promise<Response> {
+    const gs = this.gameState!;
+
+    if (!gs.winner && gs.phase !== 'finished') {
+      return jsonResponse({ error: 'Can only replay after the game is finished' }, 400);
+    }
+
+    // Reset any in-flight AI state so the next game can start cleanly.
+    this.pendingAIClue = null;
+    this.pendingAIClueTeam = null;
+    this.pendingAIClueLoaded = true;
+    this.aiClueTask = null;
+    this.aiSuggestTask = null;
+    this.aiSuggestSig = null;
+    this.aiSuggestCache = null;
+    this.aiSuggestCacheSig = null;
+    this.aiSuggestCacheAt = 0;
+    this.aiPlayInFlight = false;
+    this.pendingBackgroundClueId = null;
+    this.pendingBackgroundClueTeam = null;
+    this.pendingBackgroundGuessId = null;
+    this.pendingBackgroundGuessTeam = null;
+    await this.state.storage.delete('pendingAIClue');
+
+    const now = Date.now();
+
+    // Generate a fresh board but keep lobby settings and seats.
+    const words = this.generateBoard();
+    const key = this.generateKey('red'); // RED always starts
+
+    gs.phase = 'playing';
+    gs.isPaused = false;
+    gs.pausedAt = null;
+    gs.pausedPhaseElapsed = null;
+    gs.pausedTurnElapsed = null;
+
+    gs.words = words;
+    gs.key = key;
+    gs.revealed = new Array(25).fill(false);
+
+    gs.currentTeam = 'red';
+    gs.currentClue = null;
+    gs.guessesRemaining = 0;
+    gs.turnPhase = 'clue';
+    gs.redRemaining = 9;
+    gs.blueRemaining = 8;
+    gs.winner = null;
+    gs.clueHistory = [];
+    gs.guessHistory = [];
+    gs.lastSimulationResults = null;
+
+    gs.phaseStartTime = now;
+    gs.turnStartTime = now;
+    gs.timing = {
+      red: { spymasterMs: 0, guesserMs: 0 },
+      blue: { spymasterMs: 0, guesserMs: 0 },
+    };
+
+    gs.createdAt = now;
+    gs.updatedAt = now;
+
+    await this.saveState();
+
+    return jsonResponse({ gameState: this.getPublicState() });
   }
 
   private async handleAIClue(request: Request): Promise<Response> {
