@@ -32,6 +32,7 @@ export class GameRoom {
   private gameState: GameState | null = null;
   private pendingAIClue: AIClueCandidate | null = null;
   private pendingAIClueTeam: Team | null = null;
+  private pendingAIClueLoaded = false;
 
   constructor(state: DurableObjectState, env: Env) {
     this.state = state;
@@ -538,11 +539,24 @@ export class GameRoom {
     }
 
     // If confirming a pending clue
+    if (body.confirm) {
+      if (!this.pendingAIClueLoaded) {
+        const stored = await this.state.storage.get('pendingAIClue') as { clue: AIClueCandidate; team: Team } | null;
+        if (stored?.clue && stored?.team) {
+          this.pendingAIClue = stored.clue;
+          this.pendingAIClueTeam = stored.team;
+        }
+        this.pendingAIClueLoaded = true;
+      }
+    }
+
     if (body.confirm && this.pendingAIClue) {
       if (this.pendingAIClueTeam && this.pendingAIClueTeam !== team) {
         // Turn advanced while the clue was pending; discard to avoid applying to wrong team.
         this.pendingAIClue = null;
         this.pendingAIClueTeam = null;
+        this.pendingAIClueLoaded = true;
+        await this.state.storage.delete('pendingAIClue');
         return jsonResponse({ error: 'Pending AI clue is stale (turn advanced)' }, 409);
       }
 
@@ -562,6 +576,8 @@ export class GameRoom {
       const confirmedClue = this.pendingAIClue;
       this.pendingAIClue = null;
       this.pendingAIClueTeam = null;
+      this.pendingAIClueLoaded = true;
+      await this.state.storage.delete('pendingAIClue');
 
       await this.saveState();
 
@@ -591,6 +607,8 @@ export class GameRoom {
 
       this.pendingAIClue = aiClue;
       this.pendingAIClueTeam = team;
+      this.pendingAIClueLoaded = true;
+      await this.state.storage.put('pendingAIClue', { clue: aiClue, team });
 
       return jsonResponse({
         clue: aiClue,
@@ -887,6 +905,9 @@ export class GameRoom {
     this.gameState!.guessesRemaining = 0;
     this.pendingAIClue = null;
     this.pendingAIClueTeam = null;
+    this.pendingAIClueLoaded = true;
+    // Best-effort cleanup; don't block turn progression on storage
+    this.state.storage.delete('pendingAIClue').catch(() => {});
   }
 
   private generateBoard(): string[] {
