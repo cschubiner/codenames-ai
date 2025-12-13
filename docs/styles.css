@@ -92,6 +92,18 @@ body {
   box-shadow: 0 4px 12px rgba(0,0,0,0.15);
 }
 
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.btn:disabled:hover {
+  transform: none;
+  box-shadow: none;
+}
+
 .btn:active {
   transform: translateY(0);
 }

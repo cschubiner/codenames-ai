@@ -297,6 +297,22 @@ function Join({ initialRoomCode, onJoin, onBack }) {
     }
   }, [initialRoomCode]);
 
+  // Poll for updates while viewing a game (to see host's role config changes)
+  useEffect(() => {
+    if (!gameState || roomCode.length !== 4) return;
+
+    const interval = setInterval(async () => {
+      try {
+        const data = await api(`/api/games/${roomCode}`);
+        setGameState(data.gameState);
+      } catch (err) {
+        // Ignore polling errors
+      }
+    }, 1500); // Poll every 1.5 seconds
+
+    return () => clearInterval(interval);
+  }, [gameState, roomCode]);
+
   const handleJoin = async (team, role) => {
     if (!playerName.trim()) {
       setError('Please enter your name');
@@ -453,9 +469,10 @@ function Board({ gameState, isSpymaster, canGuess, onGuess }) {
 }
 
 // Clue Input Component
-function ClueInput({ onSubmit }) {
+function ClueInput({ onSubmit, team }) {
   const [word, setWord] = useState('');
   const [number, setNumber] = useState(1);
+  const canSubmit = word.trim().length > 0;
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -481,7 +498,13 @@ function ClueInput({ onSubmit }) {
         min="1"
         max="9"
       />
-      <button type="submit" class="btn btn-neutral">Give Clue</button>
+      <button
+        type="submit"
+        class=${`btn ${canSubmit ? `btn-${team || 'neutral'}` : 'btn-neutral'}`}
+        disabled=${!canSubmit}
+      >
+        Give Clue
+      </button>
     </form>
   `;
 }
@@ -776,7 +799,7 @@ function Game({ roomCode, player, isSpymaster, onLeave }) {
       ${isMySpymasterTurn && html`
         <div style="text-align: center; margin: 1rem 0;">
           <p>It's your turn! Give a clue to your team.</p>
-          <${ClueInput} onSubmit=${handleClue} />
+          <${ClueInput} onSubmit=${handleClue} team=${currentTeam} />
           <div style="margin-top: 1rem;">
             <button
               class="btn btn-neutral btn-small"
