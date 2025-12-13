@@ -691,75 +691,133 @@ export class GameRoom {
         return jsonResponse({ error: 'AI could not generate a guess' }, 500);
       }
 
-      // Find the first valid suggestion (word on board and not revealed)
-      let topGuess = null;
-      let wordIndex = -1;
+      const currentTeam = this.gameState!.currentTeam;
+      const rankedWords: string[] = [];
+      const seen = new Set<string>();
 
       for (const suggestion of suggestions.suggestions) {
         const wordUpper = suggestion.word.toUpperCase();
-        const idx = this.gameState!.words.findIndex(
-          w => w.toUpperCase() === wordUpper
-        );
-
-        if (idx !== -1 && !this.gameState!.revealed[idx]) {
-          topGuess = suggestion;
-          wordIndex = idx;
-          break;
-        }
+        if (seen.has(wordUpper)) continue;
+        const idx = this.gameState!.words.findIndex(w => w.toUpperCase() === wordUpper);
+        if (idx === -1) continue;
+        if (this.gameState!.revealed[idx]) continue;
+        seen.add(wordUpper);
+        rankedWords.push(this.gameState!.words[idx]);
       }
 
-      if (!topGuess || wordIndex === -1) {
-        return jsonResponse({ error: 'AI could not find a valid word to guess' }, 500);
+      const rawStopAfter = Number.isInteger(suggestions.stopAfter) ? suggestions.stopAfter : 0;
+      const guessCount = Math.max(
+        0,
+        Math.min(
+          rawStopAfter > 0 ? rawStopAfter : this.gameState!.guessesRemaining,
+          this.gameState!.guessesRemaining,
+          rankedWords.length
+        )
+      );
+
+      if (guessCount === 0) {
+        this.endTurn();
+        this.gameState!.updatedAt = Date.now();
+        await this.saveState();
+
+        return jsonResponse({
+          plan: { reasoning: suggestions.reasoning, rankedWords, guessCount },
+          guesses: [],
+          result: {
+            word: '',
+            cardType: 'neutral' as CardType,
+            correct: false,
+            turnEnded: true,
+            gameOver: false,
+          },
+          reasoning: suggestions.reasoning,
+          gameState: this.getPublicState(),
+        });
       }
 
-      // Reveal the card
-      this.gameState!.revealed[wordIndex] = true;
-      const cardType = this.gameState!.key[wordIndex];
-      const currentTeam = this.gameState!.currentTeam;
-
-      if (cardType === 'red') this.gameState!.redRemaining--;
-      if (cardType === 'blue') this.gameState!.blueRemaining--;
-
-      this.gameState!.guessHistory.push({
-        word: topGuess.word,
-        cardType,
-        team: currentTeam,
-      });
-      const lastClue = this.gameState!.clueHistory[this.gameState!.clueHistory.length - 1];
-      if (
-        lastClue &&
-        this.gameState!.currentClue &&
-        lastClue.team === this.gameState!.currentClue.team &&
-        lastClue.word === this.gameState!.currentClue.word &&
-        lastClue.number === this.gameState!.currentClue.number
-      ) {
-        (lastClue.guesses ??= []).push({ word: topGuess.word, cardType, aiReasoning: suggestions.reasoning });
-      }
-
-      const correct = cardType === currentTeam;
+      const guessResults: GuessResult[] = [];
       let turnEnded = false;
       let gameOver = false;
       let winner: Team | null = null;
 
-      if (cardType === 'assassin') {
-        gameOver = true;
-        winner = currentTeam === 'red' ? 'blue' : 'red';
-        turnEnded = true;
-      } else if (this.gameState!.redRemaining === 0) {
-        gameOver = true;
-        winner = 'red';
-        turnEnded = true;
-      } else if (this.gameState!.blueRemaining === 0) {
-        gameOver = true;
-        winner = 'blue';
-        turnEnded = true;
-      } else if (!correct) {
-        turnEnded = true;
-      } else {
-        this.gameState!.guessesRemaining--;
-        if (this.gameState!.guessesRemaining <= 0) {
+      for (let i = 0; i < guessCount; i++) {
+        if (this.gameState!.phase !== 'playing' || !this.gameState!.currentClue) break;
+        if (this.gameState!.guessesRemaining <= 0) break;
+        if (turnEnded || gameOver) break;
+
+        const word = rankedWords[i];
+        const wordUpper = word.toUpperCase();
+        const wordIndex = this.gameState!.words.findIndex(w => w.toUpperCase() === wordUpper);
+        if (wordIndex === -1) continue;
+        if (this.gameState!.revealed[wordIndex]) continue;
+
+        // Reveal the card
+        this.gameState!.revealed[wordIndex] = true;
+        const cardType = this.gameState!.key[wordIndex];
+
+        if (cardType === 'red') this.gameState!.redRemaining--;
+        if (cardType === 'blue') this.gameState!.blueRemaining--;
+
+        this.gameState!.guessHistory.push({
+          word,
+          cardType,
+          team: currentTeam,
+        });
+
+        const lastClue = this.gameState!.clueHistory[this.gameState!.clueHistory.length - 1];
+        if (
+          lastClue &&
+          this.gameState!.currentClue &&
+          lastClue.team === this.gameState!.currentClue.team &&
+          lastClue.word === this.gameState!.currentClue.word &&
+          lastClue.number === this.gameState!.currentClue.number
+        ) {
+          (lastClue.guesses ??= []).push({ word, cardType, aiReasoning: suggestions.reasoning });
+        }
+
+        const correct = cardType === currentTeam;
+
+        let guessTurnEnded = false;
+        let guessGameOver = false;
+        let guessWinner: Team | null = null;
+
+        if (cardType === 'assassin') {
+          guessGameOver = true;
+          guessWinner = currentTeam === 'red' ? 'blue' : 'red';
+          guessTurnEnded = true;
+        } else if (this.gameState!.redRemaining === 0) {
+          guessGameOver = true;
+          guessWinner = 'red';
+          guessTurnEnded = true;
+        } else if (this.gameState!.blueRemaining === 0) {
+          guessGameOver = true;
+          guessWinner = 'blue';
+          guessTurnEnded = true;
+        } else if (!correct) {
+          guessTurnEnded = true;
+        } else {
+          this.gameState!.guessesRemaining--;
+          if (this.gameState!.guessesRemaining <= 0) {
+            guessTurnEnded = true;
+          }
+        }
+
+        if (guessGameOver) {
+          gameOver = true;
+          winner = guessWinner;
+          turnEnded = true;
+        } else if (guessTurnEnded) {
           turnEnded = true;
         }
+
+        guessResults.push({
+          word,
+          cardType,
+          correct,
+          turnEnded: guessTurnEnded,
+          gameOver: guessGameOver,
+          winner: guessWinner || undefined,
+        });
       }
 
       if (gameOver) {
@@ -767,22 +825,31 @@ export class GameRoom {
         this.gameState!.winner = winner;
       }
 
-      if (turnEnded && !gameOver) {
+      if (!gameOver) {
+        // Always end the turn after the planned number of guesses (or earlier if a guess ended it).
+        if (!turnEnded && guessResults.length > 0) {
+          guessResults[guessResults.length - 1].turnEnded = true;
+        }
+        turnEnded = true;
         this.endTurn();
       }
 
       this.gameState!.updatedAt = Date.now();
       await this.saveState();
 
+      const lastGuess = guessResults[guessResults.length - 1];
+
       return jsonResponse({
-        guess: topGuess,
-        result: {
-          word: topGuess.word,
-          cardType,
-          correct,
+        plan: { reasoning: suggestions.reasoning, rankedWords, guessCount },
+        guesses: guessResults,
+        guess: lastGuess ? { word: lastGuess.word } : null,
+        result: lastGuess || {
+          word: '',
+          cardType: 'neutral' as CardType,
+          correct: false,
           turnEnded,
           gameOver,
-          winner,
+          winner: winner || undefined,
         },
         reasoning: suggestions.reasoning,
         gameState: this.getPublicState(),
