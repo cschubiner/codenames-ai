@@ -491,6 +491,7 @@ function Game({ roomCode, player, isSpymaster, onLeave }) {
   const [gameState, setGameState] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [showWinnerModal, setShowWinnerModal] = useState(true);
 
   const fetchState = useCallback(async () => {
     try {
@@ -725,12 +726,23 @@ function Game({ roomCode, player, isSpymaster, onLeave }) {
 
       ${error && html`<div class="error">${error}</div>`}
 
-      ${winner && html`
-        <div class="winner-overlay">
-          <div class="winner-modal ${winner}">
+      ${winner && showWinnerModal && html`
+        <div class="winner-overlay" onClick=${() => setShowWinnerModal(false)}>
+          <div class="winner-modal ${winner}" onClick=${(e) => e.stopPropagation()}>
+            <button class="modal-close" onClick=${() => setShowWinnerModal(false)}>✕</button>
             <h2>${winner.toUpperCase()} WINS!</h2>
-            <button class="btn btn-outline" onClick=${onLeave}>Back to Home</button>
+            <div class="winner-actions">
+              <button class="btn btn-outline" onClick=${() => setShowWinnerModal(false)}>View Board</button>
+              <button class="btn btn-blue" onClick=${onLeave}>Back to Home</button>
+            </div>
           </div>
+        </div>
+      `}
+
+      ${winner && !showWinnerModal && html`
+        <div class="winner-banner ${winner}">
+          <span>${winner.toUpperCase()} WINS!</span>
+          <button class="btn btn-outline btn-small" onClick=${onLeave}>Back to Home</button>
         </div>
       `}
 
@@ -876,6 +888,7 @@ function HostView({ roomCode, onLeave }) {
   const [error, setError] = useState(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiActionPending, setAiActionPending] = useState(false);
+  const [showWinnerModal, setShowWinnerModal] = useState(true);
 
   const fetchState = useCallback(async () => {
     try {
@@ -969,12 +982,23 @@ function HostView({ roomCode, onLeave }) {
         <div style="font-size: 2rem;">Room: <strong>${roomCode}</strong></div>
       </div>
 
-      ${winner && html`
-        <div class="winner-overlay">
-          <div class="winner-modal ${winner}">
+      ${winner && showWinnerModal && html`
+        <div class="winner-overlay" onClick=${() => setShowWinnerModal(false)}>
+          <div class="winner-modal ${winner}" onClick=${(e) => e.stopPropagation()}>
+            <button class="modal-close" onClick=${() => setShowWinnerModal(false)}>✕</button>
             <h2>${winner.toUpperCase()} WINS!</h2>
-            <button class="btn btn-outline" onClick=${onLeave}>New Game</button>
+            <div class="winner-actions">
+              <button class="btn btn-outline" onClick=${() => setShowWinnerModal(false)}>View Board</button>
+              <button class="btn btn-blue" onClick=${onLeave}>New Game</button>
+            </div>
           </div>
+        </div>
+      `}
+
+      ${winner && !showWinnerModal && html`
+        <div class="winner-banner ${winner}">
+          <span>${winner.toUpperCase()} WINS!</span>
+          <button class="btn btn-outline btn-small" onClick=${onLeave}>New Game</button>
         </div>
       `}
 
@@ -984,7 +1008,7 @@ function HostView({ roomCode, onLeave }) {
         </div>
         <div class="current-turn">
           <div class="turn-indicator ${currentTeam}" style="font-size: 1.5rem; padding: 1rem 2rem;">
-            ${currentTeam.toUpperCase()}'s Turn
+            ${winner ? 'Game Over' : currentTeam.toUpperCase() + "'s Turn"}
           </div>
         </div>
         <div class="team-score blue">

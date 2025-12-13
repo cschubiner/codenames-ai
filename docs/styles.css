@@ -492,6 +492,66 @@ body {
   color: var(--blue);
 }
 
+.modal-close {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  color: var(--text-light);
+  padding: 0.5rem;
+  line-height: 1;
+  border-radius: 50%;
+  transition: background 0.15s;
+}
+
+.modal-close:hover {
+  background: var(--border);
+  color: var(--text);
+}
+
+.winner-modal {
+  position: relative;
+}
+
+.winner-actions {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  margin-top: 1.5rem;
+}
+
+/* Winner Banner (shown after dismissing modal) */
+.winner-banner {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 1.5rem;
+  padding: 1rem 2rem;
+  margin: 0 auto 1rem;
+  max-width: 600px;
+  border-radius: 12px;
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.winner-banner.red {
+  background: linear-gradient(135deg, var(--red-light), var(--red));
+  color: white;
+}
+
+.winner-banner.blue {
+  background: linear-gradient(135deg, var(--blue-light), var(--blue));
+  color: white;
+}
+
+.winner-banner .btn-outline {
+  background: white;
+  color: var(--text);
+}
+
 /* Host View */
 .host-view {
   padding: 2rem;

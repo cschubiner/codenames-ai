@@ -275,6 +275,7 @@ export class GameRoom {
       word: body.word,
       number: body.number,
       team: this.gameState!.currentTeam,
+      guesses: [],
     };
 
     this.gameState!.currentClue = clue;
@@ -331,6 +332,17 @@ export class GameRoom {
       cardType,
       team: currentTeam,
     });
+    // Attach guess to the current clue in history (for UI display)
+    const lastClue = this.gameState!.clueHistory[this.gameState!.clueHistory.length - 1];
+    if (
+      lastClue &&
+      this.gameState!.currentClue &&
+      lastClue.team === this.gameState!.currentClue.team &&
+      lastClue.word === this.gameState!.currentClue.word &&
+      lastClue.number === this.gameState!.currentClue.number
+    ) {
+      (lastClue.guesses ??= []).push({ word: body.word, cardType });
+    }
 
     // Determine result
     const correct = cardType === currentTeam;
@@ -430,6 +442,7 @@ export class GameRoom {
         number: this.pendingAIClue.number,
         team,
         intendedTargets: this.pendingAIClue.intendedTargets,
+        guesses: [],
       };
 
       this.gameState!.currentClue = clue;
@@ -603,6 +616,16 @@ export class GameRoom {
         cardType,
         team: currentTeam,
       });
+      const lastClue = this.gameState!.clueHistory[this.gameState!.clueHistory.length - 1];
+      if (
+        lastClue &&
+        this.gameState!.currentClue &&
+        lastClue.team === this.gameState!.currentClue.team &&
+        lastClue.word === this.gameState!.currentClue.word &&
+        lastClue.number === this.gameState!.currentClue.number
+      ) {
+        (lastClue.guesses ??= []).push({ word: topGuess.word, cardType });
+      }
 
       const correct = cardType === currentTeam;
       let turnEnded = false;

@@ -34,6 +34,7 @@ export interface Clue {
   number: number;
   team: Team;
   intendedTargets?: string[];
+  guesses?: Array<{ word: string; cardType: CardType }>;
 }
 
 export interface GuessResult {
