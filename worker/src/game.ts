@@ -14,6 +14,8 @@ import {
   ModelConfig,
   ReasoningEffortConfig,
   CustomInstructionsConfig,
+  MultiModelConfig,
+  ModelEntry,
   AssassinBehavior,
   TurnTimerSetting,
   GuessResult,
@@ -232,6 +234,30 @@ export class GameRoom {
     if (!gs.reasoningEffortConfig || typeof gs.reasoningEffortConfig !== 'object') gs.reasoningEffortConfig = {};
     if (!gs.customInstructionsConfig || typeof gs.customInstructionsConfig !== 'object') gs.customInstructionsConfig = {};
 
+    // Multi-model config: migrate from legacy single-model config if needed
+    if (!gs.multiModelConfig || typeof gs.multiModelConfig !== 'object') {
+      gs.multiModelConfig = {
+        redSpymaster: [],
+        redGuesser: [],
+        blueSpymaster: [],
+        blueGuesser: [],
+      };
+    }
+    // Ensure each role has at least one model entry (migrate from legacy if empty)
+    for (const key of ['redSpymaster', 'redGuesser', 'blueSpymaster', 'blueGuesser'] as const) {
+      if (!Array.isArray(gs.multiModelConfig[key]) || gs.multiModelConfig[key].length === 0) {
+        // Migrate from legacy config
+        const legacyModel = gs.modelConfig?.[key] || modelConfigDefaults[key];
+        const legacyEffort = gs.reasoningEffortConfig?.[key];
+        const legacyInstructions = gs.customInstructionsConfig?.[key];
+        gs.multiModelConfig[key] = [{
+          model: legacyModel,
+          reasoningEffort: legacyEffort,
+          customInstructions: legacyInstructions,
+        }];
+      }
+    }
+
     if (!Array.isArray(gs.players)) gs.players = [];
     if (!Array.isArray(gs.clueHistory)) gs.clueHistory = [];
     if (!Array.isArray(gs.guessHistory)) gs.guessHistory = [];
@@ -285,6 +311,12 @@ export class GameRoom {
       },
       reasoningEffortConfig: {},
       customInstructionsConfig: {},
+      multiModelConfig: {
+        redSpymaster: [{ model: 'gpt-4o' }],
+        redGuesser: [{ model: 'gpt-4o-mini' }],
+        blueSpymaster: [{ model: 'gpt-4o' }],
+        blueGuesser: [{ model: 'gpt-4o-mini' }],
+      },
       players: [],
       words,
       key,
@@ -342,6 +374,7 @@ export class GameRoom {
       modelConfig?: ModelConfig;
       reasoningEffortConfig?: ReasoningEffortConfig;
       customInstructionsConfig?: CustomInstructionsConfig;
+      multiModelConfig?: MultiModelConfig;
       allowHumanAIHelp?: boolean;
       giveAIPastTurnInfo?: boolean;
       simulationCount?: number;
@@ -356,6 +389,29 @@ export class GameRoom {
     }
     if (body.customInstructionsConfig) {
       this.gameState!.customInstructionsConfig = body.customInstructionsConfig;
+    }
+    // Multi-model config
+    if (body.multiModelConfig) {
+      // Validate and update multi-model config
+      for (const key of ['redSpymaster', 'redGuesser', 'blueSpymaster', 'blueGuesser'] as const) {
+        if (Array.isArray(body.multiModelConfig[key]) && body.multiModelConfig[key].length > 0) {
+          this.gameState!.multiModelConfig[key] = body.multiModelConfig[key];
+          // Also update legacy modelConfig with first model for backwards compatibility
+          this.gameState!.modelConfig[key] = body.multiModelConfig[key][0].model;
+          // Update legacy reasoningEffortConfig
+          if (body.multiModelConfig[key][0].reasoningEffort) {
+            this.gameState!.reasoningEffortConfig[key] = body.multiModelConfig[key][0].reasoningEffort;
+          } else {
+            delete this.gameState!.reasoningEffortConfig[key];
+          }
+          // Update legacy customInstructionsConfig
+          if (body.multiModelConfig[key][0].customInstructions) {
+            this.gameState!.customInstructionsConfig[key] = body.multiModelConfig[key][0].customInstructions;
+          } else {
+            delete this.gameState!.customInstructionsConfig[key];
+          }
+        }
+      }
     }
     if (typeof body.allowHumanAIHelp === 'boolean') {
       this.gameState!.allowHumanAIHelp = body.allowHumanAIHelp;
@@ -923,11 +979,20 @@ export class GameRoom {
       });
     }
 
-    // Get the configured model, reasoning effort, and custom instructions for this team's spymaster
-    const modelKey = `${team}Spymaster` as keyof ModelConfig;
-    const model = this.gameState!.modelConfig[modelKey];
-    const reasoningEffort = this.gameState!.reasoningEffortConfig[modelKey];
-    const customInstructions = this.gameState!.customInstructionsConfig[modelKey];
+    // Get the configured models for this team's spymaster
+    const modelKey = `${team}Spymaster` as keyof MultiModelConfig;
+    const modelEntries = this.gameState!.multiModelConfig[modelKey];
+
+    // Helper to pick a random model entry
+    const pickRandomModelEntry = (): ModelEntry => {
+      return modelEntries[Math.floor(Math.random() * modelEntries.length)];
+    };
+
+    // For background mode check, use first model (or we could check all)
+    const firstEntry = modelEntries[0];
+    const model = firstEntry.model;
+    const reasoningEffort = firstEntry.reasoningEffort;
+    const customInstructions = firstEntry.customInstructions;
 
     // Check if model requires background mode (for long-running requests)
     if (requiresBackgroundMode(model)) {
@@ -980,10 +1045,8 @@ export class GameRoom {
               this.gameState!,
               team,
               simulationCount,
-              model,
-              this.gameState!.simulationModel,
-              reasoningEffort,
-              customInstructions
+              modelEntries, // Pass all model entries - random selection happens inside
+              this.gameState!.simulationModel
             );
 
             // Store simulation results for display if showSimulationDetails is enabled
@@ -1016,16 +1079,18 @@ export class GameRoom {
           gameState: this.getPublicState(),
         });
       } else {
-        // Standard mode: generate a single clue
+        // Standard mode: generate a single clue (randomly select from model entries)
         if (!this.aiClueTask) {
           this.aiClueTask = (async () => {
+            // Pick a random model entry for single clue generation
+            const selectedEntry = pickRandomModelEntry();
             const aiClue = await generateAIClue(
               apiKey,
               this.gameState!,
               team,
-              model,
-              reasoningEffort,
-              customInstructions
+              selectedEntry.model,
+              selectedEntry.reasoningEffort,
+              selectedEntry.customInstructions
             );
 
             this.pendingAIClue = aiClue;
@@ -1219,23 +1284,23 @@ export class GameRoom {
         return jsonResponse({ error: 'AI suggest already in progress' }, 409);
       }
 
-      // Get the configured model, reasoning effort, and custom instructions for this team's guesser
-      const modelKey = `${clue.team}Guesser` as keyof ModelConfig;
-      const model = this.gameState!.modelConfig[modelKey];
-      const reasoningEffort = this.gameState!.reasoningEffortConfig[modelKey];
-      const customInstructions = this.gameState!.customInstructionsConfig[modelKey];
+      // Get the configured model entries for this team's guesser
+      const guesserModelKey = `${clue.team}Guesser` as keyof MultiModelConfig;
+      const guesserModelEntries = this.gameState!.multiModelConfig[guesserModelKey];
 
       this.aiSuggestSig = suggestSig;
       this.aiSuggestTask = (async () => {
+        // Pick a random model entry for guess suggestions
+        const selectedEntry = guesserModelEntries[Math.floor(Math.random() * guesserModelEntries.length)];
         const suggestions = await generateAIGuesses(
           apiKey,
           this.gameState!,
           clue.word,
           clue.number,
           clue.team,
-          model,
-          reasoningEffort,
-          customInstructions
+          selectedEntry.model,
+          selectedEntry.reasoningEffort,
+          selectedEntry.customInstructions
         );
         this.aiSuggestCache = suggestions;
         this.aiSuggestCacheSig = suggestSig;
@@ -1291,11 +1356,12 @@ export class GameRoom {
       }
       this.aiPlayInFlight = true;
 
-      // Get the configured model, reasoning effort, and custom instructions for this team's guesser
-      const modelKey = `${expectedClue.team}Guesser` as keyof ModelConfig;
-      const model = this.gameState!.modelConfig[modelKey];
-      const reasoningEffort = this.gameState!.reasoningEffortConfig[modelKey];
-      const customInstructions = this.gameState!.customInstructionsConfig[modelKey];
+      // Get the configured model entries for this team's guesser
+      const playGuesserModelKey = `${expectedClue.team}Guesser` as keyof MultiModelConfig;
+      const playGuesserModelEntries = this.gameState!.multiModelConfig[playGuesserModelKey];
+
+      // Pick a random model entry for AI play
+      const selectedEntry = playGuesserModelEntries[Math.floor(Math.random() * playGuesserModelEntries.length)];
 
       // Get AI suggestions
       const suggestions = await generateAIGuesses(
@@ -1304,9 +1370,9 @@ export class GameRoom {
         expectedClue.word,
         expectedClue.number,
         expectedClue.team,
-        model,
-        reasoningEffort,
-        customInstructions
+        selectedEntry.model,
+        selectedEntry.reasoningEffort,
+        selectedEntry.customInstructions
       );
 
       // If the turn advanced while we were waiting on OpenAI, don't apply a stale guess.
@@ -1659,6 +1725,7 @@ export class GameRoom {
       modelConfig: gs.modelConfig,
       reasoningEffortConfig: gs.reasoningEffortConfig,
       customInstructionsConfig: gs.customInstructionsConfig,
+      multiModelConfig: gs.multiModelConfig,
       players: gs.players,
       words: gs.words,
       revealed: gs.revealed,

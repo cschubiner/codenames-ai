@@ -14,6 +14,7 @@ import {
   ClueSimulationResult,
   SimulationEvaluationResult,
   AssassinBehavior,
+  ModelEntry,
 } from './types';
 
 interface OpenAIMessage {
@@ -967,20 +968,27 @@ Strategy tips:
 
 /**
  * Generate multiple clue candidates in parallel
+ * If modelEntries array is provided, randomly picks a model for each candidate
  */
 export async function generateMultipleClueCandidates(
   apiKey: string,
   gameState: GameState,
   team: Team,
   count: number,
-  model: string,
-  reasoningEffort?: string,
-  customInstructions?: string
+  modelEntries: ModelEntry[]
 ): Promise<AIClueCandidate[]> {
-  // Generate all candidates in parallel
-  const candidatePromises = Array.from({ length: count }, () =>
-    generateSingleClueCandidate(apiKey, gameState, team, model, reasoningEffort, customInstructions)
-  );
+  // Generate all candidates in parallel, randomly picking a model entry for each
+  const candidatePromises = Array.from({ length: count }, () => {
+    const entry = modelEntries[Math.floor(Math.random() * modelEntries.length)];
+    return generateSingleClueCandidate(
+      apiKey,
+      gameState,
+      team,
+      entry.model,
+      entry.reasoningEffort,
+      entry.customInstructions
+    );
+  });
 
   const candidates = await Promise.all(candidatePromises);
   return candidates;
@@ -1184,26 +1192,25 @@ export function calculateSimulationScore(
 /**
  * Evaluate multiple clue candidates by simulating guesser responses
  * Returns the winning candidate and all results for display
+ *
+ * @param modelEntries - Array of model entries for the spymaster (randomly picks for each candidate)
+ * @param simulationModel - Model to use for simulating guesser responses
  */
 export async function evaluateClueWithSimulation(
   apiKey: string,
   gameState: GameState,
   team: Team,
   simulationCount: number,
-  spymasterModel: string,
-  simulationModel: string,
-  reasoningEffort?: string,
-  customInstructions?: string
+  modelEntries: ModelEntry[],
+  simulationModel: string
 ): Promise<SimulationEvaluationResult> {
-  // Step 1: Generate all candidates in parallel
+  // Step 1: Generate all candidates in parallel (randomly selecting from model entries)
   const candidates = await generateMultipleClueCandidates(
     apiKey,
     gameState,
     team,
     simulationCount,
-    spymasterModel,
-    reasoningEffort,
-    customInstructions
+    modelEntries
   );
 
   // Step 2: Simulate guesser responses for all candidates in parallel

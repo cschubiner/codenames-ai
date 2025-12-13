@@ -542,16 +542,13 @@ function Setup({ gameState, onConfigure, onStart, onBack, error, roomCode }) {
     blueGuesser: 'human',
   });
 
-  const [modelConfig, setModelConfig] = useState(gameState?.modelConfig || {
-    redSpymaster: DEFAULT_SPYMASTER_MODEL,
-    redGuesser: DEFAULT_GUESSER_MODEL,
-    blueSpymaster: DEFAULT_SPYMASTER_MODEL,
-    blueGuesser: DEFAULT_GUESSER_MODEL,
+  // Multi-model config: each role can have multiple model entries
+  const [multiModelConfig, setMultiModelConfig] = useState(gameState?.multiModelConfig || {
+    redSpymaster: [{ model: DEFAULT_SPYMASTER_MODEL }],
+    redGuesser: [{ model: DEFAULT_GUESSER_MODEL }],
+    blueSpymaster: [{ model: DEFAULT_SPYMASTER_MODEL }],
+    blueGuesser: [{ model: DEFAULT_GUESSER_MODEL }],
   });
-
-  const [reasoningEffortConfig, setReasoningEffortConfig] = useState(gameState?.reasoningEffortConfig || {});
-
-  const [customInstructionsConfig, setCustomInstructionsConfig] = useState(gameState?.customInstructionsConfig || {});
 
   // Local state for textarea editing (to avoid API calls on every keystroke)
   const [localInstructions, setLocalInstructions] = useState({});
@@ -575,14 +572,8 @@ function Setup({ gameState, onConfigure, onStart, onBack, error, roomCode }) {
     if (gameState?.roleConfig) {
       setRoleConfig(gameState.roleConfig);
     }
-    if (gameState?.modelConfig) {
-      setModelConfig(gameState.modelConfig);
-    }
-    if (gameState?.reasoningEffortConfig) {
-      setReasoningEffortConfig(gameState.reasoningEffortConfig);
-    }
-    if (gameState?.customInstructionsConfig) {
-      setCustomInstructionsConfig(gameState.customInstructionsConfig);
+    if (gameState?.multiModelConfig) {
+      setMultiModelConfig(gameState.multiModelConfig);
     }
     if (typeof gameState?.allowHumanAIHelp === 'boolean') {
       setAllowHumanAIHelp(gameState.allowHumanAIHelp);
@@ -604,71 +595,79 @@ function Setup({ gameState, onConfigure, onStart, onBack, error, roomCode }) {
     if (gameState?.simulationModel) {
       setSimulationModel(gameState.simulationModel);
     }
-  }, [gameState?.roleConfig, gameState?.modelConfig, gameState?.reasoningEffortConfig, gameState?.customInstructionsConfig, gameState?.allowHumanAIHelp, gameState?.giveAIPastTurnInfo, gameState?.assassinBehavior, gameState?.turnTimer, gameState?.simulationCount, gameState?.simulationModel]);
+  }, [gameState?.roleConfig, gameState?.multiModelConfig, gameState?.allowHumanAIHelp, gameState?.giveAIPastTurnInfo, gameState?.assassinBehavior, gameState?.turnTimer, gameState?.simulationCount, gameState?.simulationModel]);
 
   const updateRole = (role, value) => {
     const newRoleConfig = { ...roleConfig, [role]: value };
     setRoleConfig(newRoleConfig);
-    onConfigure({ roleConfig: newRoleConfig, modelConfig, reasoningEffortConfig, customInstructionsConfig, allowHumanAIHelp, giveAIPastTurnInfo, simulationCount, simulationModel });
+    onConfigure({ roleConfig: newRoleConfig, multiModelConfig, allowHumanAIHelp, giveAIPastTurnInfo, simulationCount, simulationModel });
   };
 
-  const updateModel = (role, model) => {
-    const newModelConfig = { ...modelConfig, [role]: model };
-    setModelConfig(newModelConfig);
+  // Multi-model config helpers
+  const updateModelEntry = (role, entryIndex, field, value) => {
+    const newEntries = [...multiModelConfig[role]];
+    newEntries[entryIndex] = { ...newEntries[entryIndex], [field]: value };
     // Clear reasoning effort if the new model doesn't support it
-    let newReasoningEffortConfig = reasoningEffortConfig;
-    if (!supportsReasoningEffort(model) && reasoningEffortConfig[role]) {
-      newReasoningEffortConfig = { ...reasoningEffortConfig };
-      delete newReasoningEffortConfig[role];
-      setReasoningEffortConfig(newReasoningEffortConfig);
+    if (field === 'model' && !supportsReasoningEffort(value)) {
+      delete newEntries[entryIndex].reasoningEffort;
     }
-    onConfigure({ roleConfig, modelConfig: newModelConfig, reasoningEffortConfig: newReasoningEffortConfig, customInstructionsConfig, allowHumanAIHelp, giveAIPastTurnInfo, simulationCount, simulationModel });
+    const newConfig = { ...multiModelConfig, [role]: newEntries };
+    setMultiModelConfig(newConfig);
+    onConfigure({ roleConfig, multiModelConfig: newConfig, allowHumanAIHelp, giveAIPastTurnInfo, simulationCount, simulationModel });
   };
 
-  const updateReasoningEffort = (role, effort) => {
-    const newConfig = { ...reasoningEffortConfig };
-    if (effort) {
-      newConfig[role] = effort;
-    } else {
-      delete newConfig[role];
-    }
-    setReasoningEffortConfig(newConfig);
-    onConfigure({ roleConfig, modelConfig, reasoningEffortConfig: newConfig, customInstructionsConfig, allowHumanAIHelp, giveAIPastTurnInfo, simulationCount, simulationModel });
+  const addModelEntry = (role) => {
+    const defaultModel = role.includes('Spymaster') ? DEFAULT_SPYMASTER_MODEL : DEFAULT_GUESSER_MODEL;
+    const newEntries = [...multiModelConfig[role], { model: defaultModel }];
+    const newConfig = { ...multiModelConfig, [role]: newEntries };
+    setMultiModelConfig(newConfig);
+    onConfigure({ roleConfig, multiModelConfig: newConfig, allowHumanAIHelp, giveAIPastTurnInfo, simulationCount, simulationModel });
   };
 
-  const updateCustomInstructions = (role, instructions) => {
-    const newConfig = { ...customInstructionsConfig };
+  const removeModelEntry = (role, entryIndex) => {
+    if (multiModelConfig[role].length <= 1) return; // Can't remove last entry
+    const newEntries = multiModelConfig[role].filter((_, i) => i !== entryIndex);
+    const newConfig = { ...multiModelConfig, [role]: newEntries };
+    setMultiModelConfig(newConfig);
+    onConfigure({ roleConfig, multiModelConfig: newConfig, allowHumanAIHelp, giveAIPastTurnInfo, simulationCount, simulationModel });
+  };
+
+  const updateCustomInstructions = (role, entryIndex, instructions) => {
+    const newEntries = [...multiModelConfig[role]];
     if (instructions && instructions.trim()) {
-      newConfig[role] = instructions;
+      newEntries[entryIndex] = { ...newEntries[entryIndex], customInstructions: instructions };
     } else {
-      delete newConfig[role];
+      const { customInstructions, ...rest } = newEntries[entryIndex];
+      newEntries[entryIndex] = rest;
     }
-    setCustomInstructionsConfig(newConfig);
-    onConfigure({ roleConfig, modelConfig, reasoningEffortConfig, customInstructionsConfig: newConfig, allowHumanAIHelp, giveAIPastTurnInfo, simulationCount, simulationModel });
+    const newConfig = { ...multiModelConfig, [role]: newEntries };
+    setMultiModelConfig(newConfig);
+    onConfigure({ roleConfig, multiModelConfig: newConfig, allowHumanAIHelp, giveAIPastTurnInfo, simulationCount, simulationModel });
   };
 
-  const toggleInstructionsExpanded = (role) => {
-    setExpandedInstructions(prev => ({ ...prev, [role]: !prev[role] }));
+  const toggleInstructionsExpanded = (role, entryIndex) => {
+    const key = `${role}-${entryIndex}`;
+    setExpandedInstructions(prev => ({ ...prev, [key]: !prev[key] }));
   };
 
   const updateAllowHumanAIHelp = (value) => {
     setAllowHumanAIHelp(value);
-    onConfigure({ roleConfig, modelConfig, reasoningEffortConfig, customInstructionsConfig, allowHumanAIHelp: value, giveAIPastTurnInfo, simulationCount, simulationModel });
+    onConfigure({ roleConfig, multiModelConfig, allowHumanAIHelp: value, giveAIPastTurnInfo, simulationCount, simulationModel });
   };
 
   const updateGiveAIPastTurnInfo = (value) => {
     setGiveAIPastTurnInfo(value);
-    onConfigure({ roleConfig, modelConfig, reasoningEffortConfig, customInstructionsConfig, allowHumanAIHelp, giveAIPastTurnInfo: value, simulationCount, simulationModel });
+    onConfigure({ roleConfig, multiModelConfig, allowHumanAIHelp, giveAIPastTurnInfo: value, simulationCount, simulationModel });
   };
 
   const updateSimulationCount = (count) => {
     setSimulationCount(count);
-    onConfigure({ roleConfig, modelConfig, reasoningEffortConfig, customInstructionsConfig, allowHumanAIHelp, giveAIPastTurnInfo, simulationCount: count, simulationModel });
+    onConfigure({ roleConfig, multiModelConfig, allowHumanAIHelp, giveAIPastTurnInfo, simulationCount: count, simulationModel });
   };
 
   const updateSimulationModel = (model) => {
     setSimulationModel(model);
-    onConfigure({ roleConfig, modelConfig, reasoningEffortConfig, customInstructionsConfig, allowHumanAIHelp, giveAIPastTurnInfo, simulationCount, simulationModel: model });
+    onConfigure({ roleConfig, multiModelConfig, allowHumanAIHelp, giveAIPastTurnInfo, simulationCount, simulationModel: model });
   };
 
   const updateAssassinBehavior = async (behavior) => {
@@ -873,7 +872,7 @@ function Setup({ gameState, onConfigure, onStart, onBack, error, roomCode }) {
             </div>
             ${simulationCount > 0 && html`
               <div>
-                <label style="font-size: 0.85rem; color: var(--text-light); display: block; margin-bottom: 0.35rem;">Simulation model:</label>
+                <label style="font-size: 0.85rem; color: var(--text-light); display: block; margin-bottom: 0.35rem;">Simulation Guesser Model:</label>
                 <select
                   value=${simulationModel}
                   onChange=${(e) => updateSimulationModel(e.target.value)}
@@ -940,62 +939,91 @@ function Setup({ gameState, onConfigure, onStart, onBack, error, roomCode }) {
             })()}
             ${roleConfig[role.key] === 'ai' && html`
               <div style="margin-top: 0.5rem;">
-                <label style="font-size: 0.8rem; color: var(--text-light);">Model:</label>
-                <select
-                  value=${modelConfig[role.key]}
-                  onChange=${(e) => updateModel(role.key, e.target.value)}
-                  style="font-size: 0.85rem; padding: 0.4rem;"
-                >
-                  ${AI_MODELS.map(m => html`
-                    <option value=${m.id}>${m.name}</option>
-                  `)}
-                </select>
-              </div>
-              ${supportsReasoningEffort(modelConfig[role.key]) && html`
-                <div style="margin-top: 0.5rem;">
-                  <label style="font-size: 0.8rem; color: var(--text-light);">Reasoning Effort:</label>
-                  <select
-                    value=${reasoningEffortConfig[role.key] || ''}
-                    onChange=${(e) => updateReasoningEffort(role.key, e.target.value || undefined)}
-                    style="font-size: 0.85rem; padding: 0.4rem;"
-                  >
-                    <option value="">Default</option>
-                    <option value="none">None (fastest)</option>
-                    <option value="low">Low</option>
-                    <option value="medium">Medium</option>
-                    <option value="high">High</option>
-                    <option value="xhigh">Extra High (GPT-5.2 only)</option>
-                  </select>
+                <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                  <label style="font-size: 0.8rem; color: var(--text-light);">Models:</label>
+                  ${multiModelConfig[role.key]?.length > 1 && html`
+                    <span style="font-size: 0.75rem; color: var(--text-light);">(randomly selected each turn)</span>
+                  `}
                 </div>
-              `}
-              <div style="margin-top: 0.75rem;">
+                ${(multiModelConfig[role.key] || [{ model: role.type === 'spymaster' ? DEFAULT_SPYMASTER_MODEL : DEFAULT_GUESSER_MODEL }]).map((entry, entryIndex) => {
+                  const instructionKey = `${role.key}-${entryIndex}`;
+                  const hasCustomInstructions = entry.customInstructions && entry.customInstructions.trim();
+                  return html`
+                    <div style="margin-bottom: 0.75rem; padding: 0.5rem; background: rgba(0,0,0,0.03); border-radius: 6px; border: 1px solid var(--border);">
+                      <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+                        <select
+                          value=${entry.model}
+                          onChange=${(e) => updateModelEntry(role.key, entryIndex, 'model', e.target.value)}
+                          style="font-size: 0.85rem; padding: 0.4rem; flex: 1; min-width: 120px;"
+                        >
+                          ${AI_MODELS.map(m => html`
+                            <option value=${m.id}>${m.name}</option>
+                          `)}
+                        </select>
+                        ${supportsReasoningEffort(entry.model) && html`
+                          <select
+                            value=${entry.reasoningEffort || ''}
+                            onChange=${(e) => updateModelEntry(role.key, entryIndex, 'reasoningEffort', e.target.value || undefined)}
+                            style="font-size: 0.85rem; padding: 0.4rem; min-width: 100px;"
+                            title="Reasoning Effort"
+                          >
+                            <option value="">Effort: Default</option>
+                            <option value="none">None</option>
+                            <option value="low">Low</option>
+                            <option value="medium">Medium</option>
+                            <option value="high">High</option>
+                            <option value="xhigh">X-High</option>
+                          </select>
+                        `}
+                        <button
+                          type="button"
+                          onClick=${() => removeModelEntry(role.key, entryIndex)}
+                          disabled=${multiModelConfig[role.key].length <= 1}
+                          style="background: none; border: none; cursor: ${multiModelConfig[role.key].length <= 1 ? 'not-allowed' : 'pointer'}; font-size: 1.1rem; color: ${multiModelConfig[role.key].length <= 1 ? '#ccc' : 'var(--red)'}; padding: 0.2rem 0.4rem;"
+                          title="Remove this model"
+                        >
+                          −
+                        </button>
+                      </div>
+                      <div style="margin-top: 0.5rem;">
+                        <button
+                          type="button"
+                          onClick=${() => toggleInstructionsExpanded(role.key, entryIndex)}
+                          style="background: none; border: none; cursor: pointer; font-size: 0.8rem; color: var(--text-light); padding: 0; display: flex; align-items: center; gap: 0.25rem;"
+                        >
+                          <span style="transition: transform 0.2s; transform: rotate(${expandedInstructions[instructionKey] ? '90deg' : '0deg'}); font-size: 0.7rem;">▶</span>
+                          Instructions
+                          ${hasCustomInstructions ? html`<span style="color: var(--${role.team}); font-weight: 600;"> *</span>` : ''}
+                        </button>
+                        ${expandedInstructions[instructionKey] && html`
+                          <div style="margin-top: 0.35rem;">
+                            <textarea
+                              value=${localInstructions[instructionKey] !== undefined ? localInstructions[instructionKey] : (entry.customInstructions || '')}
+                              onInput=${(e) => setLocalInstructions(prev => ({ ...prev, [instructionKey]: e.target.value }))}
+                              onBlur=${(e) => {
+                                updateCustomInstructions(role.key, entryIndex, e.target.value);
+                                setLocalInstructions(prev => {
+                                  const next = { ...prev };
+                                  delete next[instructionKey];
+                                  return next;
+                                });
+                              }}
+                              placeholder="e.g., 'Be conservative', 'Take more risks'..."
+                              style="width: 100%; min-height: 50px; font-size: 0.8rem; padding: 0.4rem; border: 1px solid var(--border); border-radius: 4px; resize: vertical;"
+                            />
+                          </div>
+                        `}
+                      </div>
+                    </div>
+                  `;
+                })}
                 <button
                   type="button"
-                  onClick=${() => toggleInstructionsExpanded(role.key)}
-                  style="background: none; border: none; cursor: pointer; font-size: 0.85rem; color: var(--text-light); padding: 0; display: flex; align-items: center; gap: 0.25rem;"
+                  onClick=${() => addModelEntry(role.key)}
+                  style="background: none; border: 1px dashed var(--border); cursor: pointer; font-size: 0.85rem; color: var(--text-light); padding: 0.4rem 0.75rem; border-radius: 4px; display: flex; align-items: center; gap: 0.25rem; width: 100%; justify-content: center;"
                 >
-                  <span style="transition: transform 0.2s; transform: rotate(${expandedInstructions[role.key] ? '90deg' : '0deg'});">▶</span>
-                  Additional Instructions
-                  ${customInstructionsConfig[role.key] ? html`<span style="color: var(--${role.team}); font-weight: 600;"> *</span>` : ''}
+                  <span style="font-size: 1.1rem;">+</span> Add Model
                 </button>
-                ${expandedInstructions[role.key] && html`
-                  <div style="margin-top: 0.5rem;">
-                    <textarea
-                      value=${localInstructions[role.key] !== undefined ? localInstructions[role.key] : (customInstructionsConfig[role.key] || '')}
-                      onInput=${(e) => setLocalInstructions(prev => ({ ...prev, [role.key]: e.target.value }))}
-                      onBlur=${(e) => {
-                        updateCustomInstructions(role.key, e.target.value);
-                        setLocalInstructions(prev => {
-                          const next = { ...prev };
-                          delete next[role.key];
-                          return next;
-                        });
-                      }}
-                      placeholder="e.g., 'Be conservative', 'Take more risks', 'Focus on 2-word clues'..."
-                      style="width: 100%; min-height: 60px; font-size: 0.85rem; padding: 0.5rem; border: 1px solid var(--border); border-radius: 4px; resize: vertical;"
-                    />
-                  </div>
-                `}
               </div>
             `}
           </div>

@@ -14,6 +14,7 @@ export interface RoleConfig {
   blueGuesser: PlayerType;
 }
 
+// Legacy single-model config (for backwards compatibility)
 export interface ModelConfig {
   redSpymaster: string;
   redGuesser: string;
@@ -23,12 +24,28 @@ export interface ModelConfig {
 
 export type ReasoningEffort = 'none' | 'low' | 'medium' | 'high' | 'xhigh';
 
+// Single model entry with its settings
+export interface ModelEntry {
+  model: string;
+  reasoningEffort?: ReasoningEffort;
+  customInstructions?: string;
+}
+
+// Multi-model config: each role can have multiple model entries
+export interface MultiModelConfig {
+  redSpymaster: ModelEntry[];
+  redGuesser: ModelEntry[];
+  blueSpymaster: ModelEntry[];
+  blueGuesser: ModelEntry[];
+}
+
 // Assassin behavior modes
 export type AssassinBehavior = 'instant_loss' | 'reveal_opponent' | 'add_own_cards';
 
 // Turn timer options (in seconds, null = no timer)
 export type TurnTimerSetting = 60 | 120 | 180 | 240 | null;
 
+// Legacy configs (kept for backwards compatibility during migration)
 export interface ReasoningEffortConfig {
   redSpymaster?: ReasoningEffort;
   redGuesser?: ReasoningEffort;
@@ -91,9 +108,10 @@ export interface GameState {
 
   // Role configuration
   roleConfig: RoleConfig;
-  modelConfig: ModelConfig;
-  reasoningEffortConfig: ReasoningEffortConfig;
-  customInstructionsConfig: CustomInstructionsConfig;
+  modelConfig: ModelConfig; // Legacy - kept for backwards compatibility
+  reasoningEffortConfig: ReasoningEffortConfig; // Legacy
+  customInstructionsConfig: CustomInstructionsConfig; // Legacy
+  multiModelConfig: MultiModelConfig; // New: multiple models per role with individual settings
   players: Player[];
 
   // Board state
@@ -198,6 +216,7 @@ export interface PublicGameState {
   modelConfig: ModelConfig;
   reasoningEffortConfig: ReasoningEffortConfig;
   customInstructionsConfig: CustomInstructionsConfig;
+  multiModelConfig: MultiModelConfig;
   players: Player[];
   words: string[];
   revealed: boolean[];
