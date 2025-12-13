@@ -93,6 +93,9 @@ export async function generateAIClue(
   );
   const assassinWord = gameState.words.find((w, i) => gameState.key[i] === 'assassin');
 
+  const myRemaining = team === 'red' ? gameState.redRemaining : gameState.blueRemaining;
+  const opponentRemaining = team === 'red' ? gameState.blueRemaining : gameState.redRemaining;
+
   let prompt = `You are playing Codenames as the spymaster for the ${team.toUpperCase()} team.
 
 ## Game Rules Reminder
@@ -101,6 +104,10 @@ export async function generateAIClue(
 - Your team will guess based on your clue - they don't know which words are yours
 
 ## Current Board State
+
+## Remaining Words
+- Your team: ${myRemaining}
+- Opponent team: ${opponentRemaining}
 
 ### Your Team's Words (get these guessed):
 ${teamWords.map(w => `- ${w}`).join('\n')}
