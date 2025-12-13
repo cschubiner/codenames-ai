@@ -14,6 +14,7 @@ import {
   ModelConfig,
   ReasoningEffortConfig,
   CustomInstructionsConfig,
+  AssassinBehavior,
   GuessResult,
   AIClueCandidate,
 } from './types';
@@ -110,6 +111,10 @@ export class GameRoom {
         return this.handleToggleAIReasoning(request);
       }
 
+      if (method === 'POST' && path === '/set-assassin-behavior') {
+        return this.handleSetAssassinBehavior(request);
+      }
+
       return jsonResponse({ error: 'Not found' }, 404);
     } catch (error) {
       console.error('Error handling request:', error);
@@ -134,6 +139,9 @@ export class GameRoom {
 
     if (typeof gs.allowHumanAIHelp !== 'boolean') gs.allowHumanAIHelp = false;
     if (typeof gs.showAIReasoning !== 'boolean') gs.showAIReasoning = true;
+    if (!gs.assassinBehavior || !['instant_loss', 'reveal_opponent', 'add_own_cards'].includes(gs.assassinBehavior)) {
+      gs.assassinBehavior = 'instant_loss';
+    }
     if (!gs.roleConfig) gs.roleConfig = { ...roleConfigDefaults };
     for (const key of Object.keys(roleConfigDefaults) as Array<keyof RoleConfig>) {
       if (gs.roleConfig[key] !== 'human' && gs.roleConfig[key] !== 'ai') {
@@ -171,6 +179,7 @@ export class GameRoom {
       phase: 'setup',
       allowHumanAIHelp: false,
       showAIReasoning: true,
+      assassinBehavior: 'instant_loss',
       roleConfig: {
         redSpymaster: 'human',
         redGuesser: 'human',
@@ -423,21 +432,36 @@ export class GameRoom {
     let winner: Team | null = null;
 
     if (cardType === 'assassin') {
-      // Assassin - guessing team loses
-      gameOver = true;
-      winner = currentTeam === 'red' ? 'blue' : 'red';
-      turnEnded = true;
-    } else if (this.gameState!.redRemaining === 0) {
+      const behavior = this.gameState!.assassinBehavior;
+      if (behavior === 'instant_loss') {
+        // Default: guessing team loses instantly
+        gameOver = true;
+        winner = currentTeam === 'red' ? 'blue' : 'red';
+        turnEnded = true;
+      } else if (behavior === 'reveal_opponent') {
+        // Reveal 2 random opponent cards for free
+        const opponentTeam = currentTeam === 'red' ? 'blue' : 'red';
+        this.revealRandomCards(opponentTeam, 2);
+        turnEnded = true;
+      } else if (behavior === 'add_own_cards') {
+        // Convert 2 neutral cards to the guessing team's cards
+        this.convertNeutralToTeam(currentTeam, 2);
+        turnEnded = true;
+      }
+    }
+
+    // Check for win conditions after potential assassin effects
+    if (!gameOver && this.gameState!.redRemaining === 0) {
       gameOver = true;
       winner = 'red';
       turnEnded = true;
-    } else if (this.gameState!.blueRemaining === 0) {
+    } else if (!gameOver && this.gameState!.blueRemaining === 0) {
       gameOver = true;
       winner = 'blue';
       turnEnded = true;
-    } else if (!correct) {
+    } else if (!gameOver && !turnEnded && !correct) {
       turnEnded = true;
-    } else {
+    } else if (!gameOver && !turnEnded) {
       this.gameState!.guessesRemaining--;
       if (this.gameState!.guessesRemaining <= 0) {
         turnEnded = true;
@@ -512,6 +536,24 @@ export class GameRoom {
     }
 
     this.gameState!.showAIReasoning = body.showAIReasoning;
+    this.gameState!.updatedAt = Date.now();
+    await this.saveState();
+
+    return jsonResponse({ gameState: this.getPublicState() });
+  }
+
+  private async handleSetAssassinBehavior(request: Request): Promise<Response> {
+    if (this.gameState!.phase !== 'setup') {
+      return jsonResponse({ error: 'Can only change assassin behavior during setup' }, 400);
+    }
+
+    const body = await request.json() as { assassinBehavior: AssassinBehavior };
+
+    if (!['instant_loss', 'reveal_opponent', 'add_own_cards'].includes(body.assassinBehavior)) {
+      return jsonResponse({ error: 'Invalid assassin behavior' }, 400);
+    }
+
+    this.gameState!.assassinBehavior = body.assassinBehavior;
     this.gameState!.updatedAt = Date.now();
     await this.saveState();
 
@@ -820,20 +862,33 @@ export class GameRoom {
         let guessWinner: Team | null = null;
 
         if (cardType === 'assassin') {
-          guessGameOver = true;
-          guessWinner = currentTeam === 'red' ? 'blue' : 'red';
-          guessTurnEnded = true;
-        } else if (this.gameState!.redRemaining === 0) {
+          const behavior = this.gameState!.assassinBehavior;
+          if (behavior === 'instant_loss') {
+            guessGameOver = true;
+            guessWinner = currentTeam === 'red' ? 'blue' : 'red';
+            guessTurnEnded = true;
+          } else if (behavior === 'reveal_opponent') {
+            const opponentTeam = currentTeam === 'red' ? 'blue' : 'red';
+            this.revealRandomCards(opponentTeam, 2);
+            guessTurnEnded = true;
+          } else if (behavior === 'add_own_cards') {
+            this.convertNeutralToTeam(currentTeam, 2);
+            guessTurnEnded = true;
+          }
+        }
+
+        // Check win conditions after potential assassin effects
+        if (!guessGameOver && this.gameState!.redRemaining === 0) {
           guessGameOver = true;
           guessWinner = 'red';
           guessTurnEnded = true;
-        } else if (this.gameState!.blueRemaining === 0) {
+        } else if (!guessGameOver && this.gameState!.blueRemaining === 0) {
           guessGameOver = true;
           guessWinner = 'blue';
           guessTurnEnded = true;
-        } else if (!correct) {
+        } else if (!guessGameOver && !guessTurnEnded && !correct) {
           guessTurnEnded = true;
-        } else {
+        } else if (!guessGameOver && !guessTurnEnded) {
           this.gameState!.guessesRemaining--;
           if (this.gameState!.guessesRemaining <= 0) {
             guessTurnEnded = true;
@@ -899,6 +954,60 @@ export class GameRoom {
 
   // Helper methods
 
+  private revealRandomCards(team: Team, count: number): void {
+    // Find unrevealed cards belonging to the specified team
+    const unrevealedTeamIndices: number[] = [];
+    for (let i = 0; i < 25; i++) {
+      if (!this.gameState!.revealed[i] && this.gameState!.key[i] === team) {
+        unrevealedTeamIndices.push(i);
+      }
+    }
+
+    // Shuffle and pick up to `count` cards to reveal
+    const shuffled = unrevealedTeamIndices.sort(() => Math.random() - 0.5);
+    const toReveal = shuffled.slice(0, Math.min(count, shuffled.length));
+
+    for (const idx of toReveal) {
+      this.gameState!.revealed[idx] = true;
+      if (team === 'red') {
+        this.gameState!.redRemaining--;
+      } else {
+        this.gameState!.blueRemaining--;
+      }
+      // Add to guess history
+      this.gameState!.guessHistory.push({
+        word: this.gameState!.words[idx],
+        cardType: team,
+        team: team, // credited to the team that benefits
+      });
+    }
+  }
+
+  private convertNeutralToTeam(team: Team, count: number): void {
+    // Find unrevealed neutral cards
+    const unrevealedNeutralIndices: number[] = [];
+    for (let i = 0; i < 25; i++) {
+      if (!this.gameState!.revealed[i] && this.gameState!.key[i] === 'neutral') {
+        unrevealedNeutralIndices.push(i);
+      }
+    }
+
+    // Shuffle and pick up to `count` cards to convert
+    const shuffled = unrevealedNeutralIndices.sort(() => Math.random() - 0.5);
+    const toConvert = shuffled.slice(0, Math.min(count, shuffled.length));
+
+    for (const idx of toConvert) {
+      // Change the key card type to the team's color
+      this.gameState!.key[idx] = team;
+      // Increase remaining count for that team
+      if (team === 'red') {
+        this.gameState!.redRemaining++;
+      } else {
+        this.gameState!.blueRemaining++;
+      }
+    }
+  }
+
   private endTurn(): void {
     this.gameState!.currentTeam = this.gameState!.currentTeam === 'red' ? 'blue' : 'red';
     this.gameState!.currentClue = null;
@@ -951,6 +1060,7 @@ export class GameRoom {
       phase: gs.phase,
       allowHumanAIHelp: gs.allowHumanAIHelp,
       showAIReasoning: gs.showAIReasoning,
+      assassinBehavior: gs.assassinBehavior,
       roleConfig: gs.roleConfig,
       modelConfig: gs.modelConfig,
       reasoningEffortConfig: gs.reasoningEffortConfig,

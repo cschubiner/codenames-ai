@@ -192,6 +192,8 @@ function Setup({ gameState, onConfigure, onStart, onBack, error, roomCode }) {
 
   const [allowHumanAIHelp, setAllowHumanAIHelp] = useState(!!gameState?.allowHumanAIHelp);
 
+  const [assassinBehavior, setAssassinBehavior] = useState(gameState?.assassinBehavior || 'instant_loss');
+
   // Sync roleConfig from server updates (e.g., when players join)
   useEffect(() => {
     if (gameState?.roleConfig) {
@@ -209,7 +211,10 @@ function Setup({ gameState, onConfigure, onStart, onBack, error, roomCode }) {
     if (typeof gameState?.allowHumanAIHelp === 'boolean') {
       setAllowHumanAIHelp(gameState.allowHumanAIHelp);
     }
-  }, [gameState?.roleConfig, gameState?.modelConfig, gameState?.reasoningEffortConfig, gameState?.customInstructionsConfig, gameState?.allowHumanAIHelp]);
+    if (gameState?.assassinBehavior) {
+      setAssassinBehavior(gameState.assassinBehavior);
+    }
+  }, [gameState?.roleConfig, gameState?.modelConfig, gameState?.reasoningEffortConfig, gameState?.customInstructionsConfig, gameState?.allowHumanAIHelp, gameState?.assassinBehavior]);
 
   const updateRole = (role, value) => {
     const newRoleConfig = { ...roleConfig, [role]: value };
@@ -259,6 +264,18 @@ function Setup({ gameState, onConfigure, onStart, onBack, error, roomCode }) {
   const updateAllowHumanAIHelp = (value) => {
     setAllowHumanAIHelp(value);
     onConfigure({ roleConfig, modelConfig, reasoningEffortConfig, customInstructionsConfig, allowHumanAIHelp: value });
+  };
+
+  const updateAssassinBehavior = async (behavior) => {
+    setAssassinBehavior(behavior);
+    try {
+      await api(`/api/games/${roomCode}/set-assassin-behavior`, {
+        method: 'POST',
+        body: JSON.stringify({ assassinBehavior: behavior }),
+      });
+    } catch (err) {
+      console.error('Set assassin behavior error:', err);
+    }
   };
 
   const kickSeat = async (team, role) => {
@@ -322,6 +339,51 @@ function Setup({ gameState, onConfigure, onStart, onBack, error, roomCode }) {
             </div>
           </div>
         </label>
+      </div>
+
+      <div style="margin-bottom: 1rem; padding: 1rem; background: #f5f5f5; border-radius: 8px;">
+        <div style="font-weight: 600; margin-bottom: 0.75rem;">Assassin Behavior</div>
+        <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+          <label style="display: flex; gap: 0.5rem; align-items: flex-start; cursor: pointer;">
+            <input
+              type="radio"
+              name="assassin-behavior"
+              checked=${assassinBehavior === 'instant_loss'}
+              onChange=${() => updateAssassinBehavior('instant_loss')}
+              style="margin-top: 0.2rem;"
+            />
+            <div>
+              <div>Instant Loss (Default)</div>
+              <div style="font-size: 0.85rem; color: var(--text-light);">Team that guesses the assassin loses immediately.</div>
+            </div>
+          </label>
+          <label style="display: flex; gap: 0.5rem; align-items: flex-start; cursor: pointer;">
+            <input
+              type="radio"
+              name="assassin-behavior"
+              checked=${assassinBehavior === 'reveal_opponent'}
+              onChange=${() => updateAssassinBehavior('reveal_opponent')}
+              style="margin-top: 0.2rem;"
+            />
+            <div>
+              <div>Reveal Opponent Cards</div>
+              <div style="font-size: 0.85rem; color: var(--text-light);">Reveals 2 random cards for the opposing team (they get free progress).</div>
+            </div>
+          </label>
+          <label style="display: flex; gap: 0.5rem; align-items: flex-start; cursor: pointer;">
+            <input
+              type="radio"
+              name="assassin-behavior"
+              checked=${assassinBehavior === 'add_own_cards'}
+              onChange=${() => updateAssassinBehavior('add_own_cards')}
+              style="margin-top: 0.2rem;"
+            />
+            <div>
+              <div>Add Own Cards</div>
+              <div style="font-size: 0.85rem; color: var(--text-light);">Converts 2 neutral cards into your team's cards (more work for you).</div>
+            </div>
+          </label>
+        </div>
       </div>
 
       <div class="role-config">

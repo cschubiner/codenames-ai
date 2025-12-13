@@ -23,6 +23,9 @@ export interface ModelConfig {
 
 export type ReasoningEffort = 'none' | 'low' | 'medium' | 'high' | 'xhigh';
 
+// Assassin behavior modes
+export type AssassinBehavior = 'instant_loss' | 'reveal_opponent' | 'add_own_cards';
+
 export interface ReasoningEffortConfig {
   redSpymaster?: ReasoningEffort;
   redGuesser?: ReasoningEffort;
@@ -70,6 +73,7 @@ export interface GameState {
   // Settings
   allowHumanAIHelp: boolean;
   showAIReasoning: boolean;
+  assassinBehavior: AssassinBehavior;
 
   // Role configuration
   roleConfig: RoleConfig;
@@ -155,6 +159,7 @@ export interface PublicGameState {
   phase: GameState['phase'];
   allowHumanAIHelp: boolean;
   showAIReasoning: boolean;
+  assassinBehavior: AssassinBehavior;
   roleConfig: RoleConfig;
   modelConfig: ModelConfig;
   reasoningEffortConfig: ReasoningEffortConfig;
