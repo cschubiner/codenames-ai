@@ -13,6 +13,11 @@ ENVIRONMENT = "development"
 name = "GAME_ROOM"
 class_name = "GameRoom"
 
+# KV namespace for game registry
+[[kv_namespaces]]
+binding = "GAME_REGISTRY"
+id = "70e2c20cf95a48ddad55eda8d15c2d8a"
+
 # Migrations for Durable Objects (using SQLite for free plan compatibility)
 [[migrations]]
 tag = "v1"

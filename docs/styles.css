@@ -560,3 +560,132 @@ body {
     opacity: 0.5;
   }
 }
+
+/* Live Games List */
+.live-games {
+  margin-top: 3rem;
+  width: 100%;
+  max-width: 600px;
+}
+
+.live-games h2 {
+  text-align: center;
+  margin-bottom: 1rem;
+  color: var(--text);
+}
+
+.loading-text,
+.no-games {
+  text-align: center;
+  color: var(--text-light);
+  padding: 2rem;
+}
+
+.games-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.game-card {
+  background: var(--card-bg);
+  border: 2px solid var(--border);
+  border-radius: 12px;
+  padding: 1rem;
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s;
+}
+
+.game-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
+  border-color: var(--blue);
+}
+
+.game-card.setup {
+  border-left: 4px solid #ff9800;
+}
+
+.game-card.playing {
+  border-left: 4px solid #4caf50;
+}
+
+.game-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.room-code-small {
+  font-family: monospace;
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: 0.15rem;
+  background: var(--text);
+  color: white;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+}
+
+.game-phase {
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.game-phase.setup {
+  color: #ff9800;
+}
+
+.game-phase.playing {
+  color: #4caf50;
+}
+
+.game-card-body {
+  display: flex;
+  justify-content: space-around;
+  padding: 0.5rem 0;
+}
+
+.game-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.stat-label {
+  font-size: 0.75rem;
+  color: var(--text-light);
+  text-transform: uppercase;
+  letter-spacing: 0.05rem;
+}
+
+.stat-value {
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.stat-value.highlight {
+  color: var(--blue);
+}
+
+.game-card-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+}
+
+.time-ago {
+  font-size: 0.8rem;
+  color: var(--text-light);
+}
+
+.join-hint {
+  font-size: 0.85rem;
+  color: var(--blue);
+  font-weight: 500;
+}

@@ -25,15 +25,97 @@ async function api(endpoint, options = {}) {
   return data;
 }
 
+// Format time ago
+function timeAgo(timestamp) {
+  const seconds = Math.floor((Date.now() - timestamp) / 1000);
+  if (seconds < 60) return 'just now';
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  return `${hours}h ago`;
+}
+
 // Home Screen
-function Home({ onHostGame, onJoinGame }) {
+function Home({ onHostGame, onJoinGame, onJoinRoom }) {
+  const [games, setGames] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchGames = useCallback(async () => {
+    try {
+      const data = await api('/api/games');
+      setGames(data.games || []);
+    } catch (err) {
+      console.error('Failed to fetch games:', err);
+    }
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    fetchGames();
+    const interval = setInterval(fetchGames, 5000);
+    return () => clearInterval(interval);
+  }, [fetchGames]);
+
   return html`
     <div class="home">
       <h1>Codenames AI</h1>
       <p>Play Codenames with AI teammates</p>
       <div class="home-buttons">
         <button class="btn btn-red" onClick=${onHostGame}>Host Game</button>
-        <button class="btn btn-blue" onClick=${onJoinGame}>Join Game</button>
+        <button class="btn btn-blue" onClick=${onJoinGame}>Join by Code</button>
+      </div>
+
+      <div class="live-games">
+        <h2>Live Games</h2>
+        ${loading && html`<p class="loading-text">Loading games...</p>`}
+        ${!loading && games.length === 0 && html`
+          <p class="no-games">No active games. Host one to get started!</p>
+        `}
+        ${!loading && games.length > 0 && html`
+          <div class="games-list">
+            ${games.map(game => html`
+              <div class="game-card ${game.phase}" onClick=${() => onJoinRoom(game.roomCode)}>
+                <div class="game-card-header">
+                  <span class="room-code-small">${game.roomCode}</span>
+                  <span class="game-phase ${game.phase}">
+                    ${game.phase === 'setup' ? '⚙️ Setting Up' : '🎮 In Progress'}
+                  </span>
+                </div>
+                <div class="game-card-body">
+                  ${game.phase === 'setup' ? html`
+                    <div class="game-stat">
+                      <span class="stat-label">Players</span>
+                      <span class="stat-value">${game.playerCount}/4</span>
+                    </div>
+                    <div class="game-stat">
+                      <span class="stat-label">Open Roles</span>
+                      <span class="stat-value highlight">${game.humanRolesNeeded > 0 ? game.humanRolesNeeded : 'None'}</span>
+                    </div>
+                  ` : html`
+                    <div class="game-stat">
+                      <span class="stat-label">Score</span>
+                      <span class="stat-value">
+                        <span style="color: var(--red);">🔴 ${game.redRemaining}</span>
+                        ${' vs '}
+                        <span style="color: var(--blue);">🔵 ${game.blueRemaining}</span>
+                      </span>
+                    </div>
+                    <div class="game-stat">
+                      <span class="stat-label">Turn</span>
+                      <span class="stat-value" style="color: var(--${game.currentTeam});">
+                        ${game.currentTeam.toUpperCase()}
+                      </span>
+                    </div>
+                  `}
+                </div>
+                <div class="game-card-footer">
+                  <span class="time-ago">${timeAgo(game.updatedAt)}</span>
+                  <span class="join-hint">Click to join →</span>
+                </div>
+              </div>
+            `)}
+          </div>
+        `}
       </div>
     </div>
   `;
@@ -186,14 +268,14 @@ function Setup({ gameState, onConfigure, onStart, onBack, error, roomCode }) {
 }
 
 // Join Screen
-function Join({ onJoin, onBack }) {
-  const [roomCode, setRoomCode] = useState('');
+function Join({ initialRoomCode, onJoin, onBack }) {
+  const [roomCode, setRoomCode] = useState(initialRoomCode || '');
   const [playerName, setPlayerName] = useState('');
   const [gameState, setGameState] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  const lookupGame = async () => {
+  const lookupGame = useCallback(async () => {
     if (roomCode.length !== 4) return;
 
     setLoading(true);
@@ -206,7 +288,14 @@ function Join({ onJoin, onBack }) {
       setGameState(null);
     }
     setLoading(false);
-  };
+  }, [roomCode]);
+
+  // Auto-lookup if we have an initial room code
+  useEffect(() => {
+    if (initialRoomCode && initialRoomCode.length === 4) {
+      lookupGame();
+    }
+  }, [initialRoomCode]);
 
   const handleJoin = async (team, role) => {
     if (!playerName.trim()) {
@@ -1002,11 +1091,18 @@ function App() {
     setError(null);
   };
 
+  // Handle clicking a game from the list - go directly to join with code pre-filled
+  const handleJoinRoom = (code) => {
+    setRoomCode(code);
+    setScreen('join');
+  };
+
   return html`
     ${screen === 'home' && html`
       <${Home}
         onHostGame=${handleHostGame}
         onJoinGame=${() => setScreen('join')}
+        onJoinRoom=${handleJoinRoom}
       />
     `}
     ${screen === 'setup' && html`
@@ -1021,6 +1117,7 @@ function App() {
     `}
     ${screen === 'join' && html`
       <${Join}
+        initialRoomCode=${roomCode}
         onJoin=${handleJoinGame}
         onBack=${handleBack}
       />

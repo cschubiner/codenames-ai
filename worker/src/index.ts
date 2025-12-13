@@ -10,7 +10,21 @@ export { GameRoom } from './game';
 
 interface Env {
   GAME_ROOM: DurableObjectNamespace;
+  GAME_REGISTRY: KVNamespace;
   OPENAI_API_KEY?: string;
+}
+
+// Game registry entry stored in KV
+interface GameRegistryEntry {
+  roomCode: string;
+  phase: 'setup' | 'playing' | 'finished';
+  playerCount: number;
+  humanRolesNeeded: number;
+  redRemaining: number;
+  blueRemaining: number;
+  currentTeam: 'red' | 'blue';
+  createdAt: number;
+  updatedAt: number;
 }
 
 const app = new Hono<{ Bindings: Env }>();
@@ -41,6 +55,74 @@ function generateRoomCode(): string {
   return code;
 }
 
+// Helper to update game registry
+async function updateGameRegistry(kv: KVNamespace, roomCode: string, gameState: any) {
+  if (!gameState) return;
+
+  // Calculate human roles needed
+  const roleConfig = gameState.roleConfig || {};
+  const players = gameState.players || [];
+  let humanRolesNeeded = 0;
+
+  const roles = ['redSpymaster', 'redGuesser', 'blueSpymaster', 'blueGuesser'];
+  for (const role of roles) {
+    if (roleConfig[role] === 'human') {
+      const [team, roleType] = role === 'redSpymaster' ? ['red', 'spymaster'] :
+        role === 'redGuesser' ? ['red', 'guesser'] :
+        role === 'blueSpymaster' ? ['blue', 'spymaster'] : ['blue', 'guesser'];
+      const filled = players.some((p: any) => p.team === team && p.role === roleType);
+      if (!filled) humanRolesNeeded++;
+    }
+  }
+
+  const entry: GameRegistryEntry = {
+    roomCode,
+    phase: gameState.phase,
+    playerCount: players.length,
+    humanRolesNeeded,
+    redRemaining: gameState.redRemaining,
+    blueRemaining: gameState.blueRemaining,
+    currentTeam: gameState.currentTeam,
+    createdAt: gameState.createdAt || Date.now(),
+    updatedAt: Date.now(),
+  };
+
+  await kv.put(`game:${roomCode}`, JSON.stringify(entry), {
+    expirationTtl: 2 * 60 * 60, // 2 hour TTL
+  });
+}
+
+// List active games
+app.get('/api/games', async (c) => {
+  try {
+    // List all keys in the registry
+    const list = await c.env.GAME_REGISTRY.list();
+    const games: GameRegistryEntry[] = [];
+
+    // Fetch each game's metadata
+    for (const key of list.keys) {
+      const data = await c.env.GAME_REGISTRY.get(key.name, 'json') as GameRegistryEntry | null;
+      if (data) {
+        // Only include games that aren't finished and were updated recently (last 2 hours)
+        const twoHoursAgo = Date.now() - 2 * 60 * 60 * 1000;
+        if (data.phase !== 'finished' && data.updatedAt > twoHoursAgo) {
+          games.push(data);
+        } else {
+          // Clean up old/finished games
+          await c.env.GAME_REGISTRY.delete(key.name);
+        }
+      }
+    }
+
+    // Sort by most recently updated
+    games.sort((a, b) => b.updatedAt - a.updatedAt);
+
+    return c.json({ games });
+  } catch (err) {
+    return c.json({ games: [], error: String(err) });
+  }
+});
+
 // Create a new game
 app.post('/api/games', async (c) => {
   const roomCode = generateRoomCode();
@@ -56,7 +138,13 @@ app.post('/api/games', async (c) => {
     body: JSON.stringify({ roomCode }),
   }));
 
-  const data = await response.json();
+  const data = await response.json() as any;
+
+  // Register the game in KV
+  if (response.ok && data.gameState) {
+    await updateGameRegistry(c.env.GAME_REGISTRY, roomCode, data.gameState);
+  }
+
   return c.json(data, response.status as any);
 });
 
@@ -95,7 +183,13 @@ app.post('/api/games/:code/configure', async (c) => {
     body: JSON.stringify(body),
   }));
 
-  const data = await response.json();
+  const data = await response.json() as any;
+
+  // Update registry
+  if (response.ok && data.gameState) {
+    await updateGameRegistry(c.env.GAME_REGISTRY, roomCode, data.gameState);
+  }
+
   return c.json(data, response.status as any);
 });
 
@@ -113,7 +207,13 @@ app.post('/api/games/:code/join', async (c) => {
     body: JSON.stringify(body),
   }));
 
-  const data = await response.json();
+  const data = await response.json() as any;
+
+  // Update registry
+  if (response.ok && data.gameState) {
+    await updateGameRegistry(c.env.GAME_REGISTRY, roomCode, data.gameState);
+  }
+
   return c.json(data, response.status as any);
 });
 
@@ -128,7 +228,13 @@ app.post('/api/games/:code/start', async (c) => {
     method: 'POST',
   }));
 
-  const data = await response.json();
+  const data = await response.json() as any;
+
+  // Update registry
+  if (response.ok && data.gameState) {
+    await updateGameRegistry(c.env.GAME_REGISTRY, roomCode, data.gameState);
+  }
+
   return c.json(data, response.status as any);
 });
 
