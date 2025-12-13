@@ -11,19 +11,21 @@
       "description": "List of candidate clues",
       "items": {
         "type": "object",
-        "required": ["clue", "number", "intended_targets", "reasoning"],
+        "required": ["reasoning", "clue", "risk_assessment", "intended_targets", "number"],
         "additionalProperties": false,
         "properties": {
+          "reasoning": {
+            "type": "string",
+            "description": "Explanation of why this clue connects the targets"
+          },
           "clue": {
             "type": "string",
             "description": "The one-word clue to give",
             "pattern": "^[A-Za-z]+$"
           },
-          "number": {
-            "type": "integer",
-            "minimum": 1,
-            "maximum": 9,
-            "description": "Number of words this clue relates to"
+          "risk_assessment": {
+            "type": "string",
+            "description": "Assessment of potential confusion with opponent/assassin words"
           },
           "intended_targets": {
             "type": "array",
@@ -32,13 +34,11 @@
             },
             "description": "The specific board words this clue is meant to hint at"
           },
-          "reasoning": {
-            "type": "string",
-            "description": "Explanation of why this clue connects the targets"
-          },
-          "risk_assessment": {
-            "type": "string",
-            "description": "Assessment of potential confusion with opponent/assassin words"
+          "number": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9,
+            "description": "Number of words this clue relates to"
           }
         }
       }

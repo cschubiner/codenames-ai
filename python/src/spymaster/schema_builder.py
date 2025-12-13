@@ -27,16 +27,20 @@ def build_spymaster_schema(team_words: list[str], num_candidates: int) -> dict[s
                     "description": f"Generate exactly {num_candidates} diverse candidate clues",
                     "items": {
                         "type": "object",
-                        "required": ["clue", "number", "intended_targets", "reasoning", "risk_assessment"],
+                        "required": ["reasoning", "clue", "risk_assessment", "intended_targets", "number"],
                         "additionalProperties": False,
                         "properties": {
+                            "reasoning": {
+                                "type": "string",
+                                "description": "Why this clue connects the target words"
+                            },
                             "clue": {
                                 "type": "string",
                                 "description": "A single word clue (no spaces, no board words)"
                             },
-                            "number": {
-                                "type": "integer",
-                                "description": "Number of words this clue relates to (1-9)"
+                            "risk_assessment": {
+                                "type": "string",
+                                "description": "Potential confusion with opponent/neutral/assassin words"
                             },
                             "intended_targets": {
                                 "type": "array",
@@ -46,13 +50,9 @@ def build_spymaster_schema(team_words: list[str], num_candidates: int) -> dict[s
                                 },
                                 "description": "The specific team words this clue hints at"
                             },
-                            "reasoning": {
-                                "type": "string",
-                                "description": "Why this clue connects the target words"
-                            },
-                            "risk_assessment": {
-                                "type": "string",
-                                "description": "Potential confusion with opponent/neutral/assassin words"
+                            "number": {
+                                "type": "integer",
+                                "description": "Number of words this clue relates to (1-9)"
                             }
                         }
                     }
@@ -87,29 +87,29 @@ def build_simple_spymaster_schema(num_candidates: int) -> dict[str, Any]:
                     "description": f"Generate exactly {num_candidates} diverse candidate clues",
                     "items": {
                         "type": "object",
-                        "required": ["clue", "number", "intended_targets", "reasoning", "risk_assessment"],
+                        "required": ["reasoning", "clue", "risk_assessment", "intended_targets", "number"],
                         "additionalProperties": False,
                         "properties": {
+                            "reasoning": {
+                                "type": "string",
+                                "description": "Why this clue connects the target words"
+                            },
                             "clue": {
                                 "type": "string",
                                 "description": "A single word clue"
                             },
-                            "number": {
-                                "type": "integer",
-                                "description": "Number of words this clue relates to"
+                            "risk_assessment": {
+                                "type": "string",
+                                "description": "Potential risks with this clue"
                             },
                             "intended_targets": {
                                 "type": "array",
                                 "items": {"type": "string"},
                                 "description": "The board words this clue hints at"
                             },
-                            "reasoning": {
-                                "type": "string",
-                                "description": "Why this clue connects the target words"
-                            },
-                            "risk_assessment": {
-                                "type": "string",
-                                "description": "Potential risks with this clue"
+                            "number": {
+                                "type": "integer",
+                                "description": "Number of words this clue relates to"
                             }
                         }
                     }

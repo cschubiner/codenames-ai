@@ -3,9 +3,13 @@
   "title": "GuesserOutput",
   "description": "Structured output from the guesser LLM. The 'guesses' array enum is dynamically populated with unrevealed board words.",
   "type": "object",
-  "required": ["guesses", "reasoning"],
+  "required": ["reasoning", "guesses"],
   "additionalProperties": false,
   "properties": {
+    "reasoning": {
+      "type": "string",
+      "description": "Brief explanation of the guessing strategy"
+    },
     "guesses": {
       "type": "array",
       "description": "Ordered list of guesses from most to least confident",
@@ -26,10 +30,6 @@
           }
         }
       }
-    },
-    "reasoning": {
-      "type": "string",
-      "description": "Brief explanation of the guessing strategy"
     },
     "should_stop": {
       "type": "boolean",

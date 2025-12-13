@@ -109,29 +109,29 @@ Strategy tips:
     strict: true,
     schema: {
       type: 'object',
-      required: ['clue', 'number', 'intendedTargets', 'reasoning', 'riskAssessment'],
+      required: ['reasoning', 'clue', 'riskAssessment', 'intendedTargets', 'number'],
       additionalProperties: false,
       properties: {
+        reasoning: {
+          type: 'string',
+          description: 'Why this clue connects the target words',
+        },
         clue: {
           type: 'string',
           description: 'A single word clue (no spaces, no board words)',
         },
-        number: {
-          type: 'integer',
-          description: 'Number of words this clue relates to (1-9)',
+        riskAssessment: {
+          type: 'string',
+          description: 'Potential confusion with opponent/neutral/assassin words',
         },
         intendedTargets: {
           type: 'array',
           items: { type: 'string' },
           description: 'The specific team words this clue hints at',
         },
-        reasoning: {
-          type: 'string',
-          description: 'Why this clue connects the target words',
-        },
-        riskAssessment: {
-          type: 'string',
-          description: 'Potential confusion with opponent/neutral/assassin words',
+        number: {
+          type: 'integer',
+          description: 'Number of words this clue relates to (1-9)',
         },
       },
     },
@@ -192,9 +192,13 @@ Guidelines:
     strict: true,
     schema: {
       type: 'object',
-      required: ['suggestions', 'reasoning', 'stopAfter'],
+      required: ['reasoning', 'suggestions', 'stopAfter'],
       additionalProperties: false,
       properties: {
+        reasoning: {
+          type: 'string',
+          description: 'Brief explanation of the guessing strategy',
+        },
         suggestions: {
           type: 'array',
           description: 'Ordered list of guesses from most to least confident',
@@ -213,10 +217,6 @@ Guidelines:
               },
             },
           },
-        },
-        reasoning: {
-          type: 'string',
-          description: 'Brief explanation of the guessing strategy',
         },
         stopAfter: {
           type: 'integer',
