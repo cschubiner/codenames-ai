@@ -47,6 +47,9 @@ export class GameRoom {
       // Load state if not loaded
       if (!this.gameState) {
         this.gameState = await this.state.storage.get('gameState') || null;
+        if (this.gameState) {
+          this.gameState = this.normalizeGameState(this.gameState);
+        }
       }
 
       // Route requests
@@ -107,6 +110,46 @@ export class GameRoom {
       console.error('Error handling request:', error);
       return jsonResponse({ error: String(error) }, 500);
     }
+  }
+
+  private normalizeGameState(gs: any): GameState {
+    const roleConfigDefaults: RoleConfig = {
+      redSpymaster: 'human',
+      redGuesser: 'human',
+      blueSpymaster: 'human',
+      blueGuesser: 'human',
+    };
+
+    const modelConfigDefaults: ModelConfig = {
+      redSpymaster: 'gpt-4o',
+      redGuesser: 'gpt-4o-mini',
+      blueSpymaster: 'gpt-4o',
+      blueGuesser: 'gpt-4o-mini',
+    };
+
+    if (typeof gs.allowHumanAIHelp !== 'boolean') gs.allowHumanAIHelp = false;
+    if (!gs.roleConfig) gs.roleConfig = { ...roleConfigDefaults };
+    for (const key of Object.keys(roleConfigDefaults) as Array<keyof RoleConfig>) {
+      if (gs.roleConfig[key] !== 'human' && gs.roleConfig[key] !== 'ai') {
+        gs.roleConfig[key] = roleConfigDefaults[key];
+      }
+    }
+
+    if (!gs.modelConfig) gs.modelConfig = { ...modelConfigDefaults };
+    for (const key of Object.keys(modelConfigDefaults) as Array<keyof ModelConfig>) {
+      if (typeof gs.modelConfig[key] !== 'string' || !gs.modelConfig[key]) {
+        gs.modelConfig[key] = modelConfigDefaults[key];
+      }
+    }
+
+    if (!gs.reasoningEffortConfig || typeof gs.reasoningEffortConfig !== 'object') gs.reasoningEffortConfig = {};
+    if (!gs.customInstructionsConfig || typeof gs.customInstructionsConfig !== 'object') gs.customInstructionsConfig = {};
+
+    if (!Array.isArray(gs.players)) gs.players = [];
+    if (!Array.isArray(gs.clueHistory)) gs.clueHistory = [];
+    if (!Array.isArray(gs.guessHistory)) gs.guessHistory = [];
+
+    return gs as GameState;
   }
 
   private async handleCreate(request: Request): Promise<Response> {
