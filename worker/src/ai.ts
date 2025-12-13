@@ -5,7 +5,16 @@
  * for long-running reasoning models.
  */
 
-import { GameState, Team, AIClueCandidate, AIGuessResponse } from './types';
+import {
+  GameState,
+  Team,
+  CardType,
+  AIClueCandidate,
+  AIGuessResponse,
+  ClueSimulationResult,
+  SimulationEvaluationResult,
+  AssassinBehavior,
+} from './types';
 
 interface OpenAIMessage {
   role: 'system' | 'user' | 'assistant';
@@ -534,7 +543,8 @@ Guidelines:
 3. Be careful - some words might be opponent words, neutral, or the assassin
 4. Order your guesses from most confident to least confident
 5. Assign confidence scores (0-1) based on how strongly each word connects to the clue
-6. If you're unsure about later guesses, indicate you should stop early`;
+6. If you're unsure about later guesses, indicate you should stop early
+7. If you can't find ANY strong connection to the clue, set stopAfter to 0 to pass the turn immediately`;
 
   if (customInstructions) {
     prompt += `\n\n## Additional Instructions\n${customInstructions}`;
@@ -573,7 +583,7 @@ Guidelines:
         },
         stopAfter: {
           type: 'integer',
-          description: 'Recommended number of guesses before stopping (0 means use all)',
+          description: 'Number of guesses to make (0 = pass turn immediately without guessing)',
         },
       },
     },
@@ -658,7 +668,7 @@ const GUESSER_SCHEMA = {
       },
       stopAfter: {
         type: 'integer',
-        description: 'Recommended number of guesses before stopping (0 means use all)',
+        description: 'Number of guesses to make (0 = pass turn immediately without guessing)',
       },
     },
   },
@@ -776,7 +786,8 @@ Guidelines:
 3. Be careful - some words might be opponent words, neutral, or the assassin
 4. Order your guesses from most confident to least confident
 5. Assign confidence scores (0-1) based on how strongly each word connects to the clue
-6. If you're unsure about later guesses, indicate you should stop early`;
+6. If you're unsure about later guesses, indicate you should stop early
+7. If you can't find ANY strong connection to the clue, set stopAfter to 0 to pass the turn immediately`;
 
   if (customInstructions) {
     prompt += `\n\n## Additional Instructions\n${customInstructions}`;
@@ -831,4 +842,380 @@ export async function startBackgroundGuess(
     model,
     reasoningEffort
   );
+}
+
+// ============================================================================
+// SIMULATION FUNCTIONS
+// For evaluating multiple candidate clues by simulating guesser responses
+// ============================================================================
+
+/**
+ * Generate a single clue candidate with higher temperature for diversity
+ */
+async function generateSingleClueCandidate(
+  apiKey: string,
+  gameState: GameState,
+  team: Team,
+  model: string,
+  reasoningEffort?: string,
+  customInstructions?: string
+): Promise<AIClueCandidate> {
+  const teamWords = gameState.words.filter((w, i) =>
+    !gameState.revealed[i] && gameState.key[i] === team
+  );
+  const opponentWords = gameState.words.filter((w, i) =>
+    !gameState.revealed[i] && gameState.key[i] === (team === 'red' ? 'blue' : 'red')
+  );
+  const neutralWords = gameState.words.filter((w, i) =>
+    !gameState.revealed[i] && gameState.key[i] === 'neutral'
+  );
+  const assassinWord = gameState.words.find((_w, i) => gameState.key[i] === 'assassin');
+
+  const myRemaining = team === 'red' ? gameState.redRemaining : gameState.blueRemaining;
+  const opponentRemaining = team === 'red' ? gameState.blueRemaining : gameState.redRemaining;
+
+  let prompt = `You are playing Codenames as the spymaster for the ${team.toUpperCase()} team.
+
+## Game Rules Reminder
+- Give a one-word clue and a number indicating how many words it relates to
+- Your clue cannot be any word on the board or a form of any board word
+- Your team will guess based on your clue - they don't know which words are yours
+
+## Current Board State
+
+## Remaining Words
+- Your team: ${myRemaining}
+- Opponent team: ${opponentRemaining}
+
+### Your Team's Words (get these guessed):
+${teamWords.map(w => `- ${w}`).join('\n')}
+
+### Opponent's Words (avoid these):
+${opponentWords.map(w => `- ${w}`).join('\n')}
+
+### Neutral Words (not harmful but waste a turn):
+${neutralWords.map(w => `- ${w}`).join('\n')}
+
+### THE ASSASSIN (instant loss if guessed):
+${assassinWord}`;
+
+  if (gameState.giveAIPastTurnInfo) {
+    prompt += buildSpymasterHistorySection(gameState, team);
+    prompt += buildSpymasterStrategySection();
+  }
+
+  prompt += `
+
+## Your Task
+Generate a single clue that connects multiple of YOUR team's words safely.
+Be creative and consider different possible connections - there are many valid approaches!
+
+Strategy tips:
+- Prioritize safety: avoid clues that could lead to the assassin
+- Consider word associations your guesser might make
+- Balance between connecting many words vs. being too vague
+- It's often better to give a safe clue for 2 words than a risky clue for 4`;
+
+  if (customInstructions) {
+    prompt += `\n\n## Additional Instructions\n${customInstructions}`;
+  }
+
+  const schema = {
+    name: 'spymaster_clue',
+    strict: true,
+    schema: {
+      type: 'object',
+      required: ['reasoning', 'clue', 'riskAssessment', 'intendedTargets', 'number'],
+      additionalProperties: false,
+      properties: {
+        reasoning: {
+          type: 'string',
+          description: 'Why this clue connects the target words',
+        },
+        clue: {
+          type: 'string',
+          description: 'A single word clue (no spaces, no board words)',
+        },
+        riskAssessment: {
+          type: 'string',
+          description: 'Potential confusion with opponent/neutral/assassin words',
+        },
+        intendedTargets: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'The specific team words this clue hints at',
+        },
+        number: {
+          type: 'integer',
+          description: 'Number of words this clue relates to (1-9)',
+        },
+      },
+    },
+  };
+
+  const result = await callChatCompletions(
+    apiKey,
+    [{ role: 'user', content: prompt }],
+    schema,
+    model,
+    0.9, // Higher temperature for diverse candidates
+    reasoningEffort
+  );
+
+  return result as AIClueCandidate;
+}
+
+/**
+ * Generate multiple clue candidates in parallel
+ */
+export async function generateMultipleClueCandidates(
+  apiKey: string,
+  gameState: GameState,
+  team: Team,
+  count: number,
+  model: string,
+  reasoningEffort?: string,
+  customInstructions?: string
+): Promise<AIClueCandidate[]> {
+  // Generate all candidates in parallel
+  const candidatePromises = Array.from({ length: count }, () =>
+    generateSingleClueCandidate(apiKey, gameState, team, model, reasoningEffort, customInstructions)
+  );
+
+  const candidates = await Promise.all(candidatePromises);
+  return candidates;
+}
+
+/**
+ * Simulate how a guesser would respond to a given clue
+ */
+export async function simulateGuesserResponse(
+  apiKey: string,
+  gameState: GameState,
+  clue: AIClueCandidate,
+  team: Team,
+  simulationModel: string
+): Promise<AIGuessResponse> {
+  const unrevealedWords = gameState.words.filter((_w, i) => !gameState.revealed[i]);
+
+  const prompt = `You are playing Codenames as a guesser for the ${team.toUpperCase()} team.
+
+## Game State
+- Your team's remaining words: ${team === 'red' ? gameState.redRemaining : gameState.blueRemaining} words left to find
+- Opponent's remaining words: ${team === 'red' ? gameState.blueRemaining : gameState.redRemaining} words left
+
+## Current Clue
+Your spymaster gave the clue: "${clue.clue}" for ${clue.number} word(s)
+
+## Unrevealed Words on the Board
+${unrevealedWords.map(w => `- ${w}`).join('\n')}
+
+## Your Task
+Analyze the clue and identify which unrevealed words your spymaster is hinting at.
+
+Guidelines:
+1. Consider semantic connections, categories, synonyms, and word associations
+2. The clue relates to exactly ${clue.number} of your team's words
+3. Be careful - some words might be opponent words, neutral, or the assassin
+4. Order your guesses from most confident to least confident
+5. Assign confidence scores (0-1) based on how strongly each word connects to the clue
+6. If you're unsure about later guesses, indicate you should stop early
+7. If you can't find ANY strong connection to the clue, set stopAfter to 0 to pass the turn immediately`;
+
+  const schema = {
+    name: 'guesser_output',
+    strict: true,
+    schema: {
+      type: 'object',
+      required: ['reasoning', 'suggestions', 'stopAfter'],
+      additionalProperties: false,
+      properties: {
+        reasoning: {
+          type: 'string',
+          description: 'Brief explanation of the guessing strategy',
+        },
+        suggestions: {
+          type: 'array',
+          description: 'Ordered list of guesses from most to least confident',
+          items: {
+            type: 'object',
+            required: ['word', 'confidence'],
+            additionalProperties: false,
+            properties: {
+              word: {
+                type: 'string',
+                description: 'The word being guessed',
+              },
+              confidence: {
+                type: 'number',
+                description: 'Confidence score between 0 and 1',
+              },
+            },
+          },
+        },
+        stopAfter: {
+          type: 'integer',
+          description: 'Number of guesses to make (0 = pass turn immediately without guessing)',
+        },
+      },
+    },
+  };
+
+  const result = await callChatCompletions(
+    apiKey,
+    [{ role: 'user', content: prompt }],
+    schema,
+    simulationModel,
+    0.3, // Lower temperature for more predictable guessing
+    undefined // No reasoning effort for simulation model
+  );
+
+  return result as AIGuessResponse;
+}
+
+/**
+ * Calculate the score for a simulated clue result
+ *
+ * Scoring:
+ * - Correct team word: +1.0
+ * - Outstanding (hinted but not guessed): +0.4
+ * - Neutral word: -0.15
+ * - Opponent word: -1.15
+ * - Assassin: varies by mode (-999, -3, or -2)
+ */
+export function calculateSimulationScore(
+  candidate: AIClueCandidate,
+  guessResponse: AIGuessResponse,
+  gameState: GameState,
+  team: Team,
+  assassinBehavior: AssassinBehavior
+): { guessResults: Array<{ word: string; cardType: CardType; points: number }>; outstandingCount: number; totalScore: number } {
+  const guessResults: Array<{ word: string; cardType: CardType; points: number }> = [];
+  let correctGuesses = 0;
+  let totalScore = 0;
+
+  // stopAfter = 0 means pass turn immediately (no guesses)
+  // stopAfter > 0 means make that many guesses (capped at clue number + 1)
+  const maxGuesses = guessResponse.stopAfter === 0
+    ? 0
+    : Math.min(guessResponse.stopAfter, candidate.number + 1);
+
+  const guessesToEvaluate = guessResponse.suggestions.slice(0, maxGuesses);
+
+  // Get assassin penalty based on behavior
+  const getAssassinPenalty = (): number => {
+    switch (assassinBehavior) {
+      case 'instant_loss': return -999;
+      case 'reveal_opponent': return -3;
+      case 'add_own_cards': return -2;
+      default: return -999;
+    }
+  };
+
+  // Evaluate each guess sequentially (simulation stops on wrong guess)
+  for (const guess of guessesToEvaluate) {
+    const wordIndex = gameState.words.findIndex(
+      w => w.toUpperCase() === guess.word.toUpperCase()
+    );
+
+    if (wordIndex === -1) {
+      // Word not found on board - shouldn't happen but skip it
+      continue;
+    }
+
+    const cardType = gameState.key[wordIndex];
+    let points = 0;
+
+    if (cardType === team) {
+      // Correct guess
+      points = 1.0;
+      correctGuesses++;
+    } else if (cardType === 'neutral') {
+      points = -0.15;
+    } else if (cardType === 'assassin') {
+      points = getAssassinPenalty();
+    } else {
+      // Opponent's word
+      points = -1.15;
+    }
+
+    guessResults.push({ word: guess.word, cardType, points });
+    totalScore += points;
+
+    // Stop evaluating if we hit a non-team card
+    if (cardType !== team) {
+      break;
+    }
+  }
+
+  // Calculate outstanding count (clue.number - correctGuesses)
+  const outstandingCount = Math.max(0, candidate.number - correctGuesses);
+
+  // Add outstanding credit: +0.4 per outstanding word
+  const outstandingScore = outstandingCount * 0.4;
+  totalScore += outstandingScore;
+
+  return { guessResults, outstandingCount, totalScore };
+}
+
+/**
+ * Evaluate multiple clue candidates by simulating guesser responses
+ * Returns the winning candidate and all results for display
+ */
+export async function evaluateClueWithSimulation(
+  apiKey: string,
+  gameState: GameState,
+  team: Team,
+  simulationCount: number,
+  spymasterModel: string,
+  simulationModel: string,
+  reasoningEffort?: string,
+  customInstructions?: string
+): Promise<SimulationEvaluationResult> {
+  // Step 1: Generate all candidates in parallel
+  const candidates = await generateMultipleClueCandidates(
+    apiKey,
+    gameState,
+    team,
+    simulationCount,
+    spymasterModel,
+    reasoningEffort,
+    customInstructions
+  );
+
+  // Step 2: Simulate guesser responses for all candidates in parallel
+  const simulationPromises = candidates.map(async (candidate): Promise<ClueSimulationResult> => {
+    const guessResponse = await simulateGuesserResponse(
+      apiKey,
+      gameState,
+      candidate,
+      team,
+      simulationModel
+    );
+
+    const { guessResults, outstandingCount, totalScore } = calculateSimulationScore(
+      candidate,
+      guessResponse,
+      gameState,
+      team,
+      gameState.assassinBehavior
+    );
+
+    return {
+      candidate,
+      simulatedGuesses: guessResponse.suggestions,
+      guesserReasoning: guessResponse.reasoning,
+      guessResults,
+      outstandingCount,
+      totalScore,
+    };
+  });
+
+  const allResults = await Promise.all(simulationPromises);
+
+  // Step 3: Sort by score and pick the winner
+  allResults.sort((a, b) => b.totalScore - a.totalScore);
+  const winner = allResults[0];
+
+  return { winner, allResults };
 }

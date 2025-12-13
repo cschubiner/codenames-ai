@@ -83,6 +83,12 @@ export interface GameState {
   assassinBehavior: AssassinBehavior;
   turnTimer: TurnTimerSetting;
 
+  // Simulation settings for AI Spymaster
+  simulationCount: number; // 0 = off, 2-9 = number of candidates to evaluate
+  simulationModel: string; // Model to use for simulating guesser responses
+  showSimulationDetails: boolean; // Show all candidates and scores in admin view
+  lastSimulationResults: ClueSimulationResult[] | null; // Results from last simulation
+
   // Role configuration
   roleConfig: RoleConfig;
   modelConfig: ModelConfig;
@@ -184,6 +190,10 @@ export interface PublicGameState {
   giveAIPastTurnInfo: boolean;
   assassinBehavior: AssassinBehavior;
   turnTimer: TurnTimerSetting;
+  simulationCount: number;
+  simulationModel: string;
+  showSimulationDetails: boolean;
+  lastSimulationResults?: ClueSimulationResult[]; // Only included when showSimulationDetails is true
   roleConfig: RoleConfig;
   modelConfig: ModelConfig;
   reasoningEffortConfig: ReasoningEffortConfig;
@@ -232,4 +242,23 @@ export interface AIGuessResponse {
   suggestions: AIGuessSuggestion[];
   reasoning: string;
   stopAfter: number;
+}
+
+// Simulation types for AI Spymaster clue evaluation
+export interface ClueSimulationResult {
+  candidate: AIClueCandidate;
+  simulatedGuesses: AIGuessSuggestion[];
+  guesserReasoning: string;
+  guessResults: Array<{
+    word: string;
+    cardType: CardType;
+    points: number;
+  }>;
+  outstandingCount: number;
+  totalScore: number;
+}
+
+export interface SimulationEvaluationResult {
+  winner: ClueSimulationResult;
+  allResults: ClueSimulationResult[];
 }

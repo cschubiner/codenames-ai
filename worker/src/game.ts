@@ -26,6 +26,7 @@ import {
   requiresBackgroundMode,
   startBackgroundClue,
   pollBackgroundRequest,
+  evaluateClueWithSimulation,
 } from './ai';
 
 // Word list (subset for the worker - full list loaded from shared/)
@@ -155,6 +156,10 @@ export class GameRoom {
         return this.handleResume();
       }
 
+      if (method === 'POST' && path === '/toggle-simulation-details') {
+        return this.handleToggleSimulationDetails(request);
+      }
+
       // Background mode endpoints for long-running AI models
       if (method === 'GET' && path === '/ai-clue-status') {
         return this.handleAIClueStatus();
@@ -200,6 +205,16 @@ export class GameRoom {
     if (!('turnTimer' in gs) || ![60, 120, 180, 240, null].includes(gs.turnTimer)) {
       gs.turnTimer = null;
     }
+    // Simulation settings
+    if (typeof gs.simulationCount !== 'number' || gs.simulationCount < 0 || gs.simulationCount > 9 || gs.simulationCount === 1) {
+      gs.simulationCount = 0;
+    }
+    if (typeof gs.simulationModel !== 'string' || !gs.simulationModel) {
+      gs.simulationModel = 'gpt-4o';
+    }
+    if (typeof gs.showSimulationDetails !== 'boolean') gs.showSimulationDetails = false;
+    if (!gs.lastSimulationResults) gs.lastSimulationResults = null;
+
     if (!gs.roleConfig) gs.roleConfig = { ...roleConfigDefaults };
     for (const key of Object.keys(roleConfigDefaults) as Array<keyof RoleConfig>) {
       if (gs.roleConfig[key] !== 'human' && gs.roleConfig[key] !== 'ai') {
@@ -252,6 +267,10 @@ export class GameRoom {
       giveAIPastTurnInfo: false,
       assassinBehavior: 'instant_loss',
       turnTimer: null,
+      simulationCount: 0,
+      simulationModel: 'gpt-4o',
+      showSimulationDetails: false,
+      lastSimulationResults: null,
       roleConfig: {
         redSpymaster: 'human',
         redGuesser: 'human',
@@ -318,7 +337,16 @@ export class GameRoom {
       return jsonResponse({ error: 'Can only configure during setup' }, 400);
     }
 
-    const body = await request.json() as { roleConfig: RoleConfig; modelConfig?: ModelConfig; reasoningEffortConfig?: ReasoningEffortConfig; customInstructionsConfig?: CustomInstructionsConfig; allowHumanAIHelp?: boolean; giveAIPastTurnInfo?: boolean };
+    const body = await request.json() as {
+      roleConfig: RoleConfig;
+      modelConfig?: ModelConfig;
+      reasoningEffortConfig?: ReasoningEffortConfig;
+      customInstructionsConfig?: CustomInstructionsConfig;
+      allowHumanAIHelp?: boolean;
+      giveAIPastTurnInfo?: boolean;
+      simulationCount?: number;
+      simulationModel?: string;
+    };
     this.gameState!.roleConfig = body.roleConfig;
     if (body.modelConfig) {
       this.gameState!.modelConfig = body.modelConfig;
@@ -334,6 +362,13 @@ export class GameRoom {
     }
     if (typeof body.giveAIPastTurnInfo === 'boolean') {
       this.gameState!.giveAIPastTurnInfo = body.giveAIPastTurnInfo;
+    }
+    // Simulation settings
+    if (typeof body.simulationCount === 'number' && body.simulationCount >= 0 && body.simulationCount <= 9 && body.simulationCount !== 1) {
+      this.gameState!.simulationCount = body.simulationCount;
+    }
+    if (typeof body.simulationModel === 'string' && body.simulationModel) {
+      this.gameState!.simulationModel = body.simulationModel;
     }
     this.gameState!.updatedAt = Date.now();
 
@@ -784,6 +819,20 @@ export class GameRoom {
     return jsonResponse({ gameState: this.getPublicState() });
   }
 
+  private async handleToggleSimulationDetails(request: Request): Promise<Response> {
+    const body = await request.json() as { showSimulationDetails: boolean };
+
+    if (typeof body.showSimulationDetails !== 'boolean') {
+      return jsonResponse({ error: 'showSimulationDetails must be a boolean' }, 400);
+    }
+
+    this.gameState!.showSimulationDetails = body.showSimulationDetails;
+    this.gameState!.updatedAt = Date.now();
+    await this.saveState();
+
+    return jsonResponse({ gameState: this.getPublicState() });
+  }
+
   private async handleAIClue(request: Request): Promise<Response> {
     if (!this.env.OPENAI_API_KEY) {
       return jsonResponse({ error: 'OpenAI API key not configured' }, 500);
@@ -917,42 +966,92 @@ export class GameRoom {
       }
     }
 
+    // Check if simulation is enabled
+    const simulationCount = this.gameState!.simulationCount;
+
     // Generate a new AI clue (synchronous path for fast models)
     try {
-      if (!this.aiClueTask) {
-        this.aiClueTask = (async () => {
-          const aiClue = await generateAIClue(
-            apiKey,
-            this.gameState!,
-            team,
-            model,
-            reasoningEffort,
-            customInstructions
-          );
+      if (simulationCount > 0) {
+        // Simulation mode: generate multiple candidates and evaluate them
+        if (!this.aiClueTask) {
+          this.aiClueTask = (async () => {
+            const simulationResult = await evaluateClueWithSimulation(
+              apiKey,
+              this.gameState!,
+              team,
+              simulationCount,
+              model,
+              this.gameState!.simulationModel,
+              reasoningEffort,
+              customInstructions
+            );
 
-          this.pendingAIClue = aiClue;
-          this.pendingAIClueTeam = team;
-          this.pendingAIClueLoaded = true;
-          await this.state.storage.put('pendingAIClue', { clue: aiClue, team });
+            // Store simulation results for display if showSimulationDetails is enabled
+            this.gameState!.lastSimulationResults = simulationResult.allResults;
+            await this.saveState();
 
-          return aiClue;
-        })().finally(() => {
-          this.aiClueTask = null;
+            const aiClue = simulationResult.winner.candidate;
+            this.pendingAIClue = aiClue;
+            this.pendingAIClueTeam = team;
+            this.pendingAIClueLoaded = true;
+            await this.state.storage.put('pendingAIClue', { clue: aiClue, team });
+
+            return aiClue;
+          })().finally(() => {
+            this.aiClueTask = null;
+          });
+        }
+
+        const aiClue = await this.aiClueTask;
+
+        this.pendingAIClue = aiClue;
+        this.pendingAIClueTeam = team;
+        this.pendingAIClueLoaded = true;
+        await this.state.storage.put('pendingAIClue', { clue: aiClue, team });
+
+        return jsonResponse({
+          clue: aiClue,
+          simulationResults: this.gameState!.showSimulationDetails ? this.gameState!.lastSimulationResults : undefined,
+          message: `AI evaluated ${simulationCount} clue candidates and selected the best. Call with confirm=true to submit it.`,
+          gameState: this.getPublicState(),
+        });
+      } else {
+        // Standard mode: generate a single clue
+        if (!this.aiClueTask) {
+          this.aiClueTask = (async () => {
+            const aiClue = await generateAIClue(
+              apiKey,
+              this.gameState!,
+              team,
+              model,
+              reasoningEffort,
+              customInstructions
+            );
+
+            this.pendingAIClue = aiClue;
+            this.pendingAIClueTeam = team;
+            this.pendingAIClueLoaded = true;
+            await this.state.storage.put('pendingAIClue', { clue: aiClue, team });
+
+            return aiClue;
+          })().finally(() => {
+            this.aiClueTask = null;
+          });
+        }
+
+        const aiClue = await this.aiClueTask;
+
+        this.pendingAIClue = aiClue;
+        this.pendingAIClueTeam = team;
+        this.pendingAIClueLoaded = true;
+        await this.state.storage.put('pendingAIClue', { clue: aiClue, team });
+
+        return jsonResponse({
+          clue: aiClue,
+          message: 'AI generated a clue. Call with confirm=true to submit it.',
+          gameState: this.getPublicState(),
         });
       }
-
-      const aiClue = await this.aiClueTask;
-
-      this.pendingAIClue = aiClue;
-      this.pendingAIClueTeam = team;
-      this.pendingAIClueLoaded = true;
-      await this.state.storage.put('pendingAIClue', { clue: aiClue, team });
-
-      return jsonResponse({
-        clue: aiClue,
-        message: 'AI generated a clue. Call with confirm=true to submit it.',
-        gameState: this.getPublicState(),
-      });
     } catch (error) {
       return jsonResponse({ error: String(error) }, 500);
     }
@@ -1241,15 +1340,19 @@ export class GameRoom {
         rankedWords.push(this.gameState!.words[idx]);
       }
 
-      const rawStopAfter = Number.isInteger(suggestions.stopAfter) ? suggestions.stopAfter : 0;
-      const guessCount = Math.max(
-        0,
-        Math.min(
-          rawStopAfter > 0 ? rawStopAfter : this.gameState!.guessesRemaining,
-          this.gameState!.guessesRemaining,
-          rankedWords.length
-        )
-      );
+      // stopAfter = 0 means pass turn immediately (no guesses)
+      // stopAfter > 0 means make that many guesses
+      const rawStopAfter = Number.isInteger(suggestions.stopAfter) ? suggestions.stopAfter : 1;
+      const guessCount = rawStopAfter === 0
+        ? 0
+        : Math.max(
+            0,
+            Math.min(
+              rawStopAfter,
+              this.gameState!.guessesRemaining,
+              rankedWords.length
+            )
+          );
 
       if (guessCount === 0) {
         this.endTurn();
@@ -1548,6 +1651,10 @@ export class GameRoom {
       giveAIPastTurnInfo: gs.giveAIPastTurnInfo,
       assassinBehavior: gs.assassinBehavior,
       turnTimer: gs.turnTimer,
+      simulationCount: gs.simulationCount,
+      simulationModel: gs.simulationModel,
+      showSimulationDetails: gs.showSimulationDetails,
+      lastSimulationResults: gs.showSimulationDetails ? gs.lastSimulationResults || undefined : undefined,
       roleConfig: gs.roleConfig,
       modelConfig: gs.modelConfig,
       reasoningEffortConfig: gs.reasoningEffortConfig,

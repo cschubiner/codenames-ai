@@ -488,6 +488,24 @@ app.post('/api/games/:code/resume', async (c) => {
   return c.json(data, response.status as any);
 });
 
+// Toggle simulation details visibility
+app.post('/api/games/:code/toggle-simulation-details', async (c) => {
+  const roomCode = c.req.param('code').toUpperCase();
+  const body = await c.req.json();
+
+  const id = c.env.GAME_ROOM.idFromName(roomCode);
+  const stub = c.env.GAME_ROOM.get(id);
+
+  const response = await stub.fetch(new Request('http://internal/toggle-simulation-details', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  }));
+
+  const data = await response.json();
+  return c.json(data, response.status as any);
+});
+
 // Get game history
 app.get('/api/history', async (c) => {
   try {

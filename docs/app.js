@@ -566,6 +566,10 @@ function Setup({ gameState, onConfigure, onStart, onBack, error, roomCode }) {
 
   const [turnTimer, setTurnTimer] = useState(gameState?.turnTimer || null);
 
+  // Simulation settings for AI spymaster
+  const [simulationCount, setSimulationCount] = useState(gameState?.simulationCount || 0);
+  const [simulationModel, setSimulationModel] = useState(gameState?.simulationModel || 'gpt-4o');
+
   // Sync roleConfig from server updates (e.g., when players join)
   useEffect(() => {
     if (gameState?.roleConfig) {
@@ -593,12 +597,19 @@ function Setup({ gameState, onConfigure, onStart, onBack, error, roomCode }) {
     if ('turnTimer' in (gameState || {})) {
       setTurnTimer(gameState.turnTimer);
     }
-  }, [gameState?.roleConfig, gameState?.modelConfig, gameState?.reasoningEffortConfig, gameState?.customInstructionsConfig, gameState?.allowHumanAIHelp, gameState?.giveAIPastTurnInfo, gameState?.assassinBehavior, gameState?.turnTimer]);
+    // Simulation settings
+    if (typeof gameState?.simulationCount === 'number') {
+      setSimulationCount(gameState.simulationCount);
+    }
+    if (gameState?.simulationModel) {
+      setSimulationModel(gameState.simulationModel);
+    }
+  }, [gameState?.roleConfig, gameState?.modelConfig, gameState?.reasoningEffortConfig, gameState?.customInstructionsConfig, gameState?.allowHumanAIHelp, gameState?.giveAIPastTurnInfo, gameState?.assassinBehavior, gameState?.turnTimer, gameState?.simulationCount, gameState?.simulationModel]);
 
   const updateRole = (role, value) => {
     const newRoleConfig = { ...roleConfig, [role]: value };
     setRoleConfig(newRoleConfig);
-    onConfigure({ roleConfig: newRoleConfig, modelConfig, reasoningEffortConfig, customInstructionsConfig, allowHumanAIHelp, giveAIPastTurnInfo });
+    onConfigure({ roleConfig: newRoleConfig, modelConfig, reasoningEffortConfig, customInstructionsConfig, allowHumanAIHelp, giveAIPastTurnInfo, simulationCount, simulationModel });
   };
 
   const updateModel = (role, model) => {
@@ -611,7 +622,7 @@ function Setup({ gameState, onConfigure, onStart, onBack, error, roomCode }) {
       delete newReasoningEffortConfig[role];
       setReasoningEffortConfig(newReasoningEffortConfig);
     }
-    onConfigure({ roleConfig, modelConfig: newModelConfig, reasoningEffortConfig: newReasoningEffortConfig, customInstructionsConfig, allowHumanAIHelp, giveAIPastTurnInfo });
+    onConfigure({ roleConfig, modelConfig: newModelConfig, reasoningEffortConfig: newReasoningEffortConfig, customInstructionsConfig, allowHumanAIHelp, giveAIPastTurnInfo, simulationCount, simulationModel });
   };
 
   const updateReasoningEffort = (role, effort) => {
@@ -622,7 +633,7 @@ function Setup({ gameState, onConfigure, onStart, onBack, error, roomCode }) {
       delete newConfig[role];
     }
     setReasoningEffortConfig(newConfig);
-    onConfigure({ roleConfig, modelConfig, reasoningEffortConfig: newConfig, customInstructionsConfig, allowHumanAIHelp, giveAIPastTurnInfo });
+    onConfigure({ roleConfig, modelConfig, reasoningEffortConfig: newConfig, customInstructionsConfig, allowHumanAIHelp, giveAIPastTurnInfo, simulationCount, simulationModel });
   };
 
   const updateCustomInstructions = (role, instructions) => {
@@ -633,7 +644,7 @@ function Setup({ gameState, onConfigure, onStart, onBack, error, roomCode }) {
       delete newConfig[role];
     }
     setCustomInstructionsConfig(newConfig);
-    onConfigure({ roleConfig, modelConfig, reasoningEffortConfig, customInstructionsConfig: newConfig, allowHumanAIHelp, giveAIPastTurnInfo });
+    onConfigure({ roleConfig, modelConfig, reasoningEffortConfig, customInstructionsConfig: newConfig, allowHumanAIHelp, giveAIPastTurnInfo, simulationCount, simulationModel });
   };
 
   const toggleInstructionsExpanded = (role) => {
@@ -642,12 +653,22 @@ function Setup({ gameState, onConfigure, onStart, onBack, error, roomCode }) {
 
   const updateAllowHumanAIHelp = (value) => {
     setAllowHumanAIHelp(value);
-    onConfigure({ roleConfig, modelConfig, reasoningEffortConfig, customInstructionsConfig, allowHumanAIHelp: value, giveAIPastTurnInfo });
+    onConfigure({ roleConfig, modelConfig, reasoningEffortConfig, customInstructionsConfig, allowHumanAIHelp: value, giveAIPastTurnInfo, simulationCount, simulationModel });
   };
 
   const updateGiveAIPastTurnInfo = (value) => {
     setGiveAIPastTurnInfo(value);
-    onConfigure({ roleConfig, modelConfig, reasoningEffortConfig, customInstructionsConfig, allowHumanAIHelp, giveAIPastTurnInfo: value });
+    onConfigure({ roleConfig, modelConfig, reasoningEffortConfig, customInstructionsConfig, allowHumanAIHelp, giveAIPastTurnInfo: value, simulationCount, simulationModel });
+  };
+
+  const updateSimulationCount = (count) => {
+    setSimulationCount(count);
+    onConfigure({ roleConfig, modelConfig, reasoningEffortConfig, customInstructionsConfig, allowHumanAIHelp, giveAIPastTurnInfo, simulationCount: count, simulationModel });
+  };
+
+  const updateSimulationModel = (model) => {
+    setSimulationModel(model);
+    onConfigure({ roleConfig, modelConfig, reasoningEffortConfig, customInstructionsConfig, allowHumanAIHelp, giveAIPastTurnInfo, simulationCount, simulationModel: model });
   };
 
   const updateAssassinBehavior = async (behavior) => {
@@ -824,6 +845,54 @@ function Setup({ gameState, onConfigure, onStart, onBack, error, roomCode }) {
           `)}
         </div>
       </div>
+
+      ${(roleConfig.redSpymaster === 'ai' || roleConfig.blueSpymaster === 'ai') && html`
+        <div style="margin-bottom: 1rem; padding: 1rem; background: #f5f5f5; border-radius: 8px;">
+          <div style="font-weight: 600; margin-bottom: 0.75rem;">AI Spymaster Simulation</div>
+          <div style="font-size: 0.85rem; color: var(--text-light); margin-bottom: 0.75rem;">
+            When enabled, the AI spymaster generates multiple candidate clues, simulates how the guesser would respond to each, and picks the best one.
+          </div>
+          <div style="display: flex; flex-wrap: wrap; gap: 1rem; align-items: flex-start;">
+            <div>
+              <label style="font-size: 0.85rem; color: var(--text-light); display: block; margin-bottom: 0.35rem;">Candidates to evaluate:</label>
+              <select
+                value=${simulationCount}
+                onChange=${(e) => updateSimulationCount(parseInt(e.target.value))}
+                style="font-size: 0.85rem; padding: 0.4rem;"
+              >
+                <option value="0">Off</option>
+                <option value="2">2</option>
+                <option value="3">3</option>
+                <option value="4">4</option>
+                <option value="5">5</option>
+                <option value="6">6</option>
+                <option value="7">7</option>
+                <option value="8">8</option>
+                <option value="9">9</option>
+              </select>
+            </div>
+            ${simulationCount > 0 && html`
+              <div>
+                <label style="font-size: 0.85rem; color: var(--text-light); display: block; margin-bottom: 0.35rem;">Simulation model:</label>
+                <select
+                  value=${simulationModel}
+                  onChange=${(e) => updateSimulationModel(e.target.value)}
+                  style="font-size: 0.85rem; padding: 0.4rem;"
+                >
+                  ${AI_MODELS.map(m => html`
+                    <option value=${m.id}>${m.name}</option>
+                  `)}
+                </select>
+              </div>
+            `}
+          </div>
+          ${simulationCount > 0 && html`
+            <div style="margin-top: 0.75rem; font-size: 0.8rem; color: var(--text-light);">
+              This will make ${simulationCount} parallel API calls to generate candidates, then ${simulationCount} more to simulate guesses.
+            </div>
+          `}
+        </div>
+      `}
 
       <div class="role-config">
         ${roles.map(role => html`
@@ -1535,9 +1604,13 @@ function Game({ roomCode, player, isSpymaster, onLeave }) {
           ? `${currentTeam}Guesser`
           : `${currentTeam}Spymaster`;
         const modelName = gameState.modelConfig?.[roleKey] || 'AI';
+        const isSimulating = !isGuessingPhase && gameState.simulationCount > 0;
         return html`
           <div style="text-align: center; margin: 1rem 0; padding: 0.75rem; background: #e3f2fd; border-radius: 8px; animation: pulse 1.5s ease-in-out infinite;">
-            <span>${modelName} is thinking...</span>
+            <span>${isSimulating
+              ? `Evaluating ${gameState.simulationCount} clue candidates...`
+              : `${modelName} is thinking...`
+            }</span>
           </div>
         `;
       })()}
@@ -1774,6 +1847,18 @@ function HostView({ roomCode, onLeave }) {
     }
   };
 
+  const toggleSimulationDetails = async (showSimulationDetails) => {
+    try {
+      await api(`/api/games/${roomCode}/toggle-simulation-details`, {
+        method: 'POST',
+        body: JSON.stringify({ showSimulationDetails }),
+      });
+      fetchState();
+    } catch (err) {
+      console.error('Toggle simulation details error:', err);
+    }
+  };
+
   // Auto-trigger AI actions for host view
   useEffect(() => {
     if (!gameState || gameState.phase !== 'playing' || gameState.winner) return;
@@ -1940,6 +2025,57 @@ function HostView({ roomCode, onLeave }) {
             />
             <span>Show AI spymaster reasoning (debug mode)</span>
           </label>
+          ${gameState.simulationCount > 0 && html`
+            <label style="display: flex; gap: 0.75rem; align-items: center; cursor: pointer; padding: 0.5rem 0;">
+              <input
+                type="checkbox"
+                checked=${gameState.showSimulationDetails === true}
+                onChange=${(e) => toggleSimulationDetails(e.target.checked)}
+              />
+              <span>Show simulation evaluation details</span>
+            </label>
+          `}
+
+          ${gameState.showSimulationDetails && gameState.lastSimulationResults && gameState.lastSimulationResults.length > 0 && html`
+            <div style="margin-top: 1rem; padding: 1rem; background: #f8f8f8; border-radius: 8px;">
+              <h4 style="margin: 0 0 0.75rem 0;">Last Simulation Results</h4>
+              <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+                ${gameState.lastSimulationResults.map((result, idx) => html`
+                  <div style="padding: 0.75rem; background: white; border-radius: 6px; border: 2px solid ${idx === 0 ? '#4caf50' : '#ddd'};">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem;">
+                      <div>
+                        <strong style="font-size: 1.1rem;">"${result.candidate.clue}" for ${result.candidate.number}</strong>
+                        ${idx === 0 && html`<span style="margin-left: 0.5rem; color: #4caf50; font-weight: bold;">WINNER</span>`}
+                      </div>
+                      <div style="font-size: 1.2rem; font-weight: bold; color: ${result.totalScore >= 0 ? '#4caf50' : '#f44336'};">
+                        ${result.totalScore >= 0 ? '+' : ''}${result.totalScore.toFixed(2)}
+                      </div>
+                    </div>
+                    <div style="font-size: 0.85rem; color: var(--text-light); margin-bottom: 0.5rem;">
+                      Targets: ${result.candidate.intendedTargets.join(', ')}
+                    </div>
+                    <div style="font-size: 0.85rem; margin-bottom: 0.5rem;">
+                      <strong>Simulated guesses:</strong>
+                      ${result.guessResults.map(g => html`
+                        <span style="margin-left: 0.5rem; padding: 0.15rem 0.4rem; border-radius: 4px; background: ${
+                          g.cardType === gameState.currentTeam ? '#e8f5e9' :
+                          g.cardType === 'neutral' ? '#f5f5f5' :
+                          g.cardType === 'assassin' ? '#ffebee' : '#e3f2fd'
+                        };">
+                          ${g.word} (${g.points >= 0 ? '+' : ''}${g.points.toFixed(2)})
+                        </span>
+                      `)}
+                    </div>
+                    ${result.outstandingCount > 0 && html`
+                      <div style="font-size: 0.85rem; color: #2196f3;">
+                        +${(result.outstandingCount * 0.4).toFixed(2)} outstanding credit (${result.outstandingCount} unhinted)
+                      </div>
+                    `}
+                  </div>
+                `)}
+              </div>
+            </div>
+          `}
 
           <h3 style="margin: 1rem 0 0.75rem 0;">Reset Seats</h3>
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
@@ -2067,9 +2203,13 @@ function HostView({ roomCode, onLeave }) {
           ? `${currentTeam}Guesser`
           : `${currentTeam}Spymaster`;
         const modelName = gameState.modelConfig?.[roleKey] || 'AI';
+        const isSimulating = !isGuessingPhase && gameState.simulationCount > 0;
         return html`
           <div style="text-align: center; margin: 1rem 0; padding: 1rem; background: #e3f2fd; border-radius: 8px; font-size: 1.5rem; animation: pulse 1.5s ease-in-out infinite;">
-            ${modelName} is thinking...
+            ${isSimulating
+              ? html`Evaluating ${gameState.simulationCount} clue candidates...`
+              : html`${modelName} is thinking...`
+            }
           </div>
         `;
       })()}
