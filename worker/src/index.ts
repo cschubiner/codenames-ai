@@ -355,4 +355,22 @@ app.post('/api/games/:code/ai-play', async (c) => {
   return c.json(data, response.status as any);
 });
 
+// Toggle AI reasoning visibility
+app.post('/api/games/:code/toggle-ai-reasoning', async (c) => {
+  const roomCode = c.req.param('code').toUpperCase();
+  const body = await c.req.json();
+
+  const id = c.env.GAME_ROOM.idFromName(roomCode);
+  const stub = c.env.GAME_ROOM.get(id);
+
+  const response = await stub.fetch(new Request('http://internal/toggle-ai-reasoning', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  }));
+
+  const data = await response.json();
+  return c.json(data, response.status as any);
+});
+
 export default app;
