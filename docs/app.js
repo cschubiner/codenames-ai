@@ -145,6 +145,7 @@ const AI_MODELS = [
   { id: 'gpt-5.1', name: 'GPT-5.1', description: 'Latest flagship' },
   { id: 'gpt-5.2', name: 'GPT-5.2', description: 'Latest flagship v2' },
   { id: 'gpt-5-mini', name: 'GPT-5 Mini', description: 'Fast GPT-5' },
+  { id: 'gpt-4.1', name: 'GPT-4.1', description: 'Fast & capable' },
   { id: 'gpt-4o', name: 'GPT-4o', description: 'Best quality' },
   { id: 'gpt-4o-mini', name: 'GPT-4o Mini', description: 'Fast & efficient' },
   { id: 'gpt-4.1-nano', name: 'GPT-4.1 Nano', description: 'Ultra fast' },
