@@ -181,6 +181,7 @@ export class GameRoom {
     if (typeof gs.allowHumanAIHelp !== 'boolean') gs.allowHumanAIHelp = false;
     if (typeof gs.showAIReasoning !== 'boolean') gs.showAIReasoning = true;
     if (typeof gs.showSpymasterReasoning !== 'boolean') gs.showSpymasterReasoning = false;
+    if (typeof gs.giveAIPastTurnInfo !== 'boolean') gs.giveAIPastTurnInfo = false;
     if (!gs.assassinBehavior || !['instant_loss', 'reveal_opponent', 'add_own_cards'].includes(gs.assassinBehavior)) {
       gs.assassinBehavior = 'instant_loss';
     }
@@ -236,6 +237,7 @@ export class GameRoom {
       allowHumanAIHelp: false,
       showAIReasoning: true,
       showSpymasterReasoning: false,
+      giveAIPastTurnInfo: false,
       assassinBehavior: 'instant_loss',
       turnTimer: null,
       roleConfig: {
@@ -300,7 +302,7 @@ export class GameRoom {
       return jsonResponse({ error: 'Can only configure during setup' }, 400);
     }
 
-    const body = await request.json() as { roleConfig: RoleConfig; modelConfig?: ModelConfig; reasoningEffortConfig?: ReasoningEffortConfig; customInstructionsConfig?: CustomInstructionsConfig; allowHumanAIHelp?: boolean };
+    const body = await request.json() as { roleConfig: RoleConfig; modelConfig?: ModelConfig; reasoningEffortConfig?: ReasoningEffortConfig; customInstructionsConfig?: CustomInstructionsConfig; allowHumanAIHelp?: boolean; giveAIPastTurnInfo?: boolean };
     this.gameState!.roleConfig = body.roleConfig;
     if (body.modelConfig) {
       this.gameState!.modelConfig = body.modelConfig;
@@ -313,6 +315,9 @@ export class GameRoom {
     }
     if (typeof body.allowHumanAIHelp === 'boolean') {
       this.gameState!.allowHumanAIHelp = body.allowHumanAIHelp;
+    }
+    if (typeof body.giveAIPastTurnInfo === 'boolean') {
+      this.gameState!.giveAIPastTurnInfo = body.giveAIPastTurnInfo;
     }
     this.gameState!.updatedAt = Date.now();
 
@@ -1463,6 +1468,7 @@ export class GameRoom {
       allowHumanAIHelp: gs.allowHumanAIHelp,
       showAIReasoning: gs.showAIReasoning,
       showSpymasterReasoning: gs.showSpymasterReasoning,
+      giveAIPastTurnInfo: gs.giveAIPastTurnInfo,
       assassinBehavior: gs.assassinBehavior,
       turnTimer: gs.turnTimer,
       roleConfig: gs.roleConfig,

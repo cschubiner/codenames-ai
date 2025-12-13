@@ -554,6 +554,8 @@ function Setup({ gameState, onConfigure, onStart, onBack, error, roomCode }) {
 
   const [allowHumanAIHelp, setAllowHumanAIHelp] = useState(!!gameState?.allowHumanAIHelp);
 
+  const [giveAIPastTurnInfo, setGiveAIPastTurnInfo] = useState(!!gameState?.giveAIPastTurnInfo);
+
   const [assassinBehavior, setAssassinBehavior] = useState(gameState?.assassinBehavior || 'instant_loss');
 
   const [turnTimer, setTurnTimer] = useState(gameState?.turnTimer || null);
@@ -575,6 +577,9 @@ function Setup({ gameState, onConfigure, onStart, onBack, error, roomCode }) {
     if (typeof gameState?.allowHumanAIHelp === 'boolean') {
       setAllowHumanAIHelp(gameState.allowHumanAIHelp);
     }
+    if (typeof gameState?.giveAIPastTurnInfo === 'boolean') {
+      setGiveAIPastTurnInfo(gameState.giveAIPastTurnInfo);
+    }
     if (gameState?.assassinBehavior) {
       setAssassinBehavior(gameState.assassinBehavior);
     }
@@ -582,12 +587,12 @@ function Setup({ gameState, onConfigure, onStart, onBack, error, roomCode }) {
     if ('turnTimer' in (gameState || {})) {
       setTurnTimer(gameState.turnTimer);
     }
-  }, [gameState?.roleConfig, gameState?.modelConfig, gameState?.reasoningEffortConfig, gameState?.customInstructionsConfig, gameState?.allowHumanAIHelp, gameState?.assassinBehavior, gameState?.turnTimer]);
+  }, [gameState?.roleConfig, gameState?.modelConfig, gameState?.reasoningEffortConfig, gameState?.customInstructionsConfig, gameState?.allowHumanAIHelp, gameState?.giveAIPastTurnInfo, gameState?.assassinBehavior, gameState?.turnTimer]);
 
   const updateRole = (role, value) => {
     const newRoleConfig = { ...roleConfig, [role]: value };
     setRoleConfig(newRoleConfig);
-    onConfigure({ roleConfig: newRoleConfig, modelConfig, reasoningEffortConfig, customInstructionsConfig, allowHumanAIHelp });
+    onConfigure({ roleConfig: newRoleConfig, modelConfig, reasoningEffortConfig, customInstructionsConfig, allowHumanAIHelp, giveAIPastTurnInfo });
   };
 
   const updateModel = (role, model) => {
@@ -600,7 +605,7 @@ function Setup({ gameState, onConfigure, onStart, onBack, error, roomCode }) {
       delete newReasoningEffortConfig[role];
       setReasoningEffortConfig(newReasoningEffortConfig);
     }
-    onConfigure({ roleConfig, modelConfig: newModelConfig, reasoningEffortConfig: newReasoningEffortConfig, customInstructionsConfig, allowHumanAIHelp });
+    onConfigure({ roleConfig, modelConfig: newModelConfig, reasoningEffortConfig: newReasoningEffortConfig, customInstructionsConfig, allowHumanAIHelp, giveAIPastTurnInfo });
   };
 
   const updateReasoningEffort = (role, effort) => {
@@ -611,7 +616,7 @@ function Setup({ gameState, onConfigure, onStart, onBack, error, roomCode }) {
       delete newConfig[role];
     }
     setReasoningEffortConfig(newConfig);
-    onConfigure({ roleConfig, modelConfig, reasoningEffortConfig: newConfig, customInstructionsConfig, allowHumanAIHelp });
+    onConfigure({ roleConfig, modelConfig, reasoningEffortConfig: newConfig, customInstructionsConfig, allowHumanAIHelp, giveAIPastTurnInfo });
   };
 
   const updateCustomInstructions = (role, instructions) => {
@@ -622,7 +627,7 @@ function Setup({ gameState, onConfigure, onStart, onBack, error, roomCode }) {
       delete newConfig[role];
     }
     setCustomInstructionsConfig(newConfig);
-    onConfigure({ roleConfig, modelConfig, reasoningEffortConfig, customInstructionsConfig: newConfig, allowHumanAIHelp });
+    onConfigure({ roleConfig, modelConfig, reasoningEffortConfig, customInstructionsConfig: newConfig, allowHumanAIHelp, giveAIPastTurnInfo });
   };
 
   const toggleInstructionsExpanded = (role) => {
@@ -631,7 +636,12 @@ function Setup({ gameState, onConfigure, onStart, onBack, error, roomCode }) {
 
   const updateAllowHumanAIHelp = (value) => {
     setAllowHumanAIHelp(value);
-    onConfigure({ roleConfig, modelConfig, reasoningEffortConfig, customInstructionsConfig, allowHumanAIHelp: value });
+    onConfigure({ roleConfig, modelConfig, reasoningEffortConfig, customInstructionsConfig, allowHumanAIHelp: value, giveAIPastTurnInfo });
+  };
+
+  const updateGiveAIPastTurnInfo = (value) => {
+    setGiveAIPastTurnInfo(value);
+    onConfigure({ roleConfig, modelConfig, reasoningEffortConfig, customInstructionsConfig, allowHumanAIHelp, giveAIPastTurnInfo: value });
   };
 
   const updateAssassinBehavior = async (behavior) => {
@@ -716,6 +726,23 @@ function Setup({ gameState, onConfigure, onStart, onBack, error, roomCode }) {
             <div style="font-weight: 600;">Allow AI help for humans</div>
             <div style="font-size: 0.9rem; color: var(--text-light);">
               When enabled, human players can use AI clue/suggestion tools during the game.
+            </div>
+          </div>
+        </label>
+      </div>
+
+      <div style="margin-bottom: 1rem; padding: 1rem; background: #f5f5f5; border-radius: 8px;">
+        <label style="display: flex; gap: 0.75rem; align-items: flex-start; cursor: pointer;">
+          <input
+            type="checkbox"
+            checked=${giveAIPastTurnInfo}
+            onChange=${(e) => updateGiveAIPastTurnInfo(e.target.checked)}
+            style="margin-top: 0.2rem;"
+          />
+          <div>
+            <div style="font-weight: 600;">Give AI past turn information</div>
+            <div style="font-size: 0.9rem; color: var(--text-light);">
+              When enabled, AI players receive detailed history of past clues and guesses, helping them track "outstanding" words from previous clues and make more strategic decisions.
             </div>
           </div>
         </label>

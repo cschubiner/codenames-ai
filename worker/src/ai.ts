@@ -189,6 +189,171 @@ export function requiresBackgroundMode(model: string): boolean {
 }
 
 /**
+ * Build turn history section for spymaster prompt
+ * Shows past clues given by this spymaster and how guessers responded
+ */
+function buildSpymasterHistorySection(gameState: GameState, team: Team): string {
+  const teamClues = gameState.clueHistory.filter(c => c.team === team);
+
+  if (teamClues.length === 0) {
+    return '';
+  }
+
+  let section = `\n## Your Past Clues This Game\n`;
+  section += `Understanding what clues you've already given helps avoid redundancy and track "outstanding" hints.\n\n`;
+
+  for (const clue of teamClues) {
+    const guessedCount = clue.guesses?.length || 0;
+    const correctGuesses = clue.guesses?.filter(g => g.cardType === team) || [];
+    const wrongGuesses = clue.guesses?.filter(g => g.cardType !== team) || [];
+    const outstandingCount = clue.number - correctGuesses.length;
+
+    section += `### Clue: "${clue.word}" for ${clue.number}\n`;
+    if (clue.intendedTargets && clue.intendedTargets.length > 0) {
+      section += `- Intended targets: ${clue.intendedTargets.join(', ')}\n`;
+    }
+    section += `- Guessed: ${guessedCount} word(s)\n`;
+    if (correctGuesses.length > 0) {
+      section += `- Correct guesses: ${correctGuesses.map(g => g.word).join(', ')}\n`;
+    }
+    if (wrongGuesses.length > 0) {
+      section += `- Wrong guesses: ${wrongGuesses.map(g => `${g.word} (${g.cardType})`).join(', ')}\n`;
+    }
+    if (outstandingCount > 0) {
+      const unrevealed = clue.intendedTargets?.filter(t =>
+        !gameState.revealed[gameState.words.findIndex(w => w.toUpperCase() === t.toUpperCase())]
+      ) || [];
+      if (unrevealed.length > 0) {
+        section += `- **Outstanding targets (${outstandingCount} word(s) not yet guessed):** ${unrevealed.join(', ')}\n`;
+        section += `  - The guesser may still be looking for words related to "${clue.word}"\n`;
+      }
+    }
+    section += '\n';
+  }
+
+  section += `## Strategic Implications\n`;
+  section += `- If you have outstanding targets from previous clues, your guesser may still guess them without a new clue\n`;
+  section += `- Consider whether a new clue might interfere with or complement outstanding hints\n`;
+  section += `- Avoid giving clues that overlap with words your guesser already missed (they may have been wrong guesses for a reason)\n`;
+
+  return section;
+}
+
+/**
+ * Build turn history section for guesser prompt
+ * Shows past clues and which words were guessed for each
+ */
+function buildGuesserHistorySection(gameState: GameState, team: Team): string {
+  const teamClues = gameState.clueHistory.filter(c => c.team === team);
+
+  if (teamClues.length === 0) {
+    return '';
+  }
+
+  let section = `\n## Past Clues From Your Spymaster This Game\n`;
+  section += `Use this history to identify "outstanding" clues - words your spymaster hinted at but you haven't found yet.\n\n`;
+
+  let totalOutstanding = 0;
+  const outstandingClues: Array<{ clue: string; number: number; guessedCorrect: number; targets?: string[] }> = [];
+
+  for (const clue of teamClues) {
+    const correctGuesses = clue.guesses?.filter(g => g.cardType === team) || [];
+    const wrongGuesses = clue.guesses?.filter(g => g.cardType !== team) || [];
+    const outstandingCount = Math.max(0, clue.number - correctGuesses.length);
+
+    section += `### Clue: "${clue.word}" for ${clue.number}\n`;
+    section += `- Correct guesses: ${correctGuesses.length > 0 ? correctGuesses.map(g => g.word).join(', ') : 'None yet'}\n`;
+    if (wrongGuesses.length > 0) {
+      section += `- Wrong guesses: ${wrongGuesses.map(g => `${g.word} (was ${g.cardType})`).join(', ')}\n`;
+    }
+
+    if (outstandingCount > 0) {
+      section += `- **${outstandingCount} word(s) still outstanding** - there are likely ${outstandingCount} more word(s) on the board related to "${clue.word}"\n`;
+      totalOutstanding += outstandingCount;
+      outstandingClues.push({
+        clue: clue.word,
+        number: clue.number,
+        guessedCorrect: correctGuesses.length,
+        targets: clue.intendedTargets
+      });
+    } else {
+      section += `- Fully resolved (all ${clue.number} words found)\n`;
+    }
+    section += '\n';
+  }
+
+  if (totalOutstanding > 0) {
+    section += `## Key Strategic Insight: Outstanding Words\n`;
+    section += `You have approximately **${totalOutstanding} outstanding word(s)** from previous clues that you haven't found yet.\n\n`;
+    section += `When analyzing the current clue, also consider:\n`;
+    for (const oc of outstandingClues) {
+      section += `- "${oc.clue}" (gave ${oc.number}, found ${oc.guessedCorrect}) - look for ${oc.number - oc.guessedCorrect} more word(s) related to this\n`;
+    }
+    section += `\nThis is valuable information! A word that connects to BOTH the current clue AND an outstanding clue is very likely to be correct.\n`;
+  }
+
+  return section;
+}
+
+/**
+ * Build advanced strategy section for spymaster
+ */
+function buildSpymasterStrategySection(): string {
+  return `
+## Advanced Spymaster Strategy
+
+### Clue Construction
+- **Scan the entire board first:** Before finalizing a clue, check every word to ensure your clue doesn't accidentally trigger opponent cards, neutrals, or the assassin.
+- **Think from the guesser's perspective:** What associations might they make that you didn't intend?
+- **Abstract vs. concrete:** Abstract clues (concepts, categories) can link more words but are riskier. Concrete clues (direct synonyms, specific facts) are safer but limited.
+
+### Risk Management
+- **Never risk the assassin:** If your clue has ANY connection to the assassin word, find a different clue.
+- **Opponent words are costly:** Guessing an opponent's word gives them progress AND ends your turn.
+- **Neutrals waste turns:** Better than opponent words, but still a setback.
+
+### Number Strategy
+- **Early game (6+ words left):** Go for 2-3 word clues to build a lead
+- **Mid game (3-5 words left):** Balance between safe 2-word clues and riskier higher numbers
+- **End game (1-2 words left):** Play it safe with 1-word clues unless you're behind
+
+### Zero Clue Strategy
+- Giving "WORD, 0" tells your team to AVOID that word - useful if it might be confused with your targets
+- Example: If "CAKE" could be confused with your words but is the assassin, consider "BAKING, 0" to warn them away
+
+### Listen to the Board
+- Words that have already been revealed give you information about what connections have been made
+- Reusing a concept from a previous successful clue (yours or opponent's) can help or confuse your guesser`;
+}
+
+/**
+ * Build advanced strategy section for guesser
+ */
+function buildGuesserStrategySection(): string {
+  return `
+## Advanced Guesser Strategy
+
+### Analyzing the Clue
+- **Think like your spymaster:** What words would they be looking at? What connections are they trying to make?
+- **Consider multiple meanings:** A clue might be a synonym, category, rhyme, pop culture reference, or compound word component
+- **Check for hypothetical better clues:** If you're considering a word, think "would a better, more specific clue exist for that word?" If yes, it might not be the target
+
+### Prioritizing Guesses
+- **Strongest connections first:** Always guess your most confident word first
+- **The "+1 bonus guess":** You can guess clue_number + 1 words. Use the extra guess for outstanding words from previous clues if you're confident
+- **Stop when uncertain:** It's often better to end your turn than to guess a word you're unsure about
+
+### Using Past Clues
+- **Outstanding words are gold:** If a word connects to both the current clue AND a previous clue you didn't fully solve, it's very likely correct
+- **Patterns in your spymaster's thinking:** Has your spymaster used category-based clues? Synonym clues? Learn their style
+
+### Risk Assessment
+- **Avoid obvious opponent words:** If a word screams "this is for the other team," avoid it
+- **The assassin is always a threat:** Never guess a word that could plausibly be the assassin
+- **When in doubt, stop:** Ending your turn early is better than hitting the assassin or an opponent word`;
+}
+
+/**
  * Call OpenAI API with structured output - routes to appropriate API
  * For background mode models, this throws an error - use startBackgroundRequest instead
  */
@@ -229,7 +394,7 @@ export async function generateAIClue(
   const neutralWords = gameState.words.filter((w, i) =>
     !gameState.revealed[i] && gameState.key[i] === 'neutral'
   );
-  const assassinWord = gameState.words.find((w, i) => gameState.key[i] === 'assassin');
+  const assassinWord = gameState.words.find((_w, i) => gameState.key[i] === 'assassin');
 
   const myRemaining = team === 'red' ? gameState.redRemaining : gameState.blueRemaining;
   const opponentRemaining = team === 'red' ? gameState.blueRemaining : gameState.redRemaining;
@@ -257,7 +422,15 @@ ${opponentWords.map(w => `- ${w}`).join('\n')}
 ${neutralWords.map(w => `- ${w}`).join('\n')}
 
 ### THE ASSASSIN (instant loss if guessed):
-${assassinWord}
+${assassinWord}`;
+
+  // Add past turn history and advanced strategy if enabled
+  if (gameState.giveAIPastTurnInfo) {
+    prompt += buildSpymasterHistorySection(gameState, team);
+    prompt += buildSpymasterStrategySection();
+  }
+
+  prompt += `
 
 ## Your Task
 Generate a single clue that connects multiple of YOUR team's words safely.
@@ -330,7 +503,7 @@ export async function generateAIGuesses(
   reasoningEffort?: string,
   customInstructions?: string
 ): Promise<AIGuessResponse> {
-  const unrevealedWords = gameState.words.filter((w, i) => !gameState.revealed[i]);
+  const unrevealedWords = gameState.words.filter((_w, i) => !gameState.revealed[i]);
 
   let prompt = `You are playing Codenames as a guesser for the ${team.toUpperCase()} team.
 
@@ -342,7 +515,15 @@ export async function generateAIGuesses(
 Your spymaster gave the clue: "${clueWord}" for ${clueNumber} word(s)
 
 ## Unrevealed Words on the Board
-${unrevealedWords.map(w => `- ${w}`).join('\n')}
+${unrevealedWords.map(w => `- ${w}`).join('\n')}`;
+
+  // Add past turn history and advanced strategy if enabled
+  if (gameState.giveAIPastTurnInfo) {
+    prompt += buildGuesserHistorySection(gameState, team);
+    prompt += buildGuesserStrategySection();
+  }
+
+  prompt += `
 
 ## Your Task
 Analyze the clue and identify which unrevealed words your spymaster is hinting at.
@@ -491,13 +672,13 @@ export function buildSpymasterPrompt(
   team: Team,
   customInstructions?: string
 ): string {
-  const teamWords = gameState.words.filter((w, i) =>
+  const teamWords = gameState.words.filter((_w, i) =>
     !gameState.revealed[i] && gameState.key[i] === team
   );
-  const opponentWords = gameState.words.filter((w, i) =>
+  const opponentWords = gameState.words.filter((_w, i) =>
     !gameState.revealed[i] && gameState.key[i] === (team === 'red' ? 'blue' : 'red')
   );
-  const neutralWords = gameState.words.filter((w, i) =>
+  const neutralWords = gameState.words.filter((_w, i) =>
     !gameState.revealed[i] && gameState.key[i] === 'neutral'
   );
   const assassinWord = gameState.words.find((_w, i) => gameState.key[i] === 'assassin');
@@ -528,7 +709,15 @@ ${opponentWords.map(w => `- ${w}`).join('\n')}
 ${neutralWords.map(w => `- ${w}`).join('\n')}
 
 ### THE ASSASSIN (instant loss if guessed):
-${assassinWord}
+${assassinWord}`;
+
+  // Add past turn history and advanced strategy if enabled
+  if (gameState.giveAIPastTurnInfo) {
+    prompt += buildSpymasterHistorySection(gameState, team);
+    prompt += buildSpymasterStrategySection();
+  }
+
+  prompt += `
 
 ## Your Task
 Generate a single clue that connects multiple of YOUR team's words safely.
@@ -568,7 +757,15 @@ export function buildGuesserPrompt(
 Your spymaster gave the clue: "${clueWord}" for ${clueNumber} word(s)
 
 ## Unrevealed Words on the Board
-${unrevealedWords.map(w => `- ${w}`).join('\n')}
+${unrevealedWords.map(w => `- ${w}`).join('\n')}`;
+
+  // Add past turn history and advanced strategy if enabled
+  if (gameState.giveAIPastTurnInfo) {
+    prompt += buildGuesserHistorySection(gameState, team);
+    prompt += buildGuesserStrategySection();
+  }
+
+  prompt += `
 
 ## Your Task
 Analyze the clue and identify which unrevealed words your spymaster is hinting at.

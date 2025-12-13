@@ -79,6 +79,7 @@ export interface GameState {
   allowHumanAIHelp: boolean;
   showAIReasoning: boolean;
   showSpymasterReasoning: boolean;
+  giveAIPastTurnInfo: boolean; // Give AI past turn history for better strategy
   assassinBehavior: AssassinBehavior;
   turnTimer: TurnTimerSetting;
 
@@ -174,6 +175,7 @@ export interface PublicGameState {
   allowHumanAIHelp: boolean;
   showAIReasoning: boolean;
   showSpymasterReasoning: boolean;
+  giveAIPastTurnInfo: boolean;
   assassinBehavior: AssassinBehavior;
   turnTimer: TurnTimerSetting;
   roleConfig: RoleConfig;
