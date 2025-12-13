@@ -389,9 +389,11 @@ function Setup({ gameState, onConfigure, onStart, onBack, error, roomCode }) {
                     style="font-size: 0.85rem; padding: 0.4rem;"
                   >
                     <option value="">Default</option>
+                    <option value="none">None (fastest)</option>
                     <option value="low">Low</option>
                     <option value="medium">Medium</option>
                     <option value="high">High</option>
+                    <option value="xhigh">Extra High (GPT-5.2 only)</option>
                   </select>
                 </div>
               `}

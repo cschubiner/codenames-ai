@@ -21,7 +21,7 @@ export interface ModelConfig {
   blueGuesser: string;
 }
 
-export type ReasoningEffort = 'low' | 'medium' | 'high';
+export type ReasoningEffort = 'none' | 'low' | 'medium' | 'high' | 'xhigh';
 
 export interface ReasoningEffortConfig {
   redSpymaster?: ReasoningEffort;
