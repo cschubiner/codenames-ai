@@ -53,6 +53,8 @@ export interface Clue {
   number: number;
   team: Team;
   intendedTargets?: string[];
+  spymasterReasoning?: string;
+  riskAssessment?: string;
   guesses?: Array<{ word: string; cardType: CardType; aiReasoning?: string }>;
 }
 
@@ -73,6 +75,7 @@ export interface GameState {
   // Settings
   allowHumanAIHelp: boolean;
   showAIReasoning: boolean;
+  showSpymasterReasoning: boolean;
   assassinBehavior: AssassinBehavior;
 
   // Role configuration
@@ -159,6 +162,7 @@ export interface PublicGameState {
   phase: GameState['phase'];
   allowHumanAIHelp: boolean;
   showAIReasoning: boolean;
+  showSpymasterReasoning: boolean;
   assassinBehavior: AssassinBehavior;
   roleConfig: RoleConfig;
   modelConfig: ModelConfig;

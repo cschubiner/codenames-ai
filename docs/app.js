@@ -136,6 +136,181 @@ function Home({ onHostGame, onJoinGame, onJoinRoom }) {
           </div>
         `}
       </div>
+
+      <${GameHistory} />
+    </div>
+  `;
+}
+
+// Format duration in human-readable form
+function formatDuration(seconds) {
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  if (minutes < 60) return secs > 0 ? `${minutes}m ${secs}s` : `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
+}
+
+// Format date for display
+function formatDate(timestamp) {
+  const date = new Date(timestamp);
+  const now = new Date();
+  const isToday = date.toDateString() === now.toDateString();
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const isYesterday = date.toDateString() === yesterday.toDateString();
+
+  if (isToday) {
+    return `Today ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+  } else if (isYesterday) {
+    return `Yesterday ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+  } else {
+    return date.toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  }
+}
+
+// Game History Component
+function GameHistory() {
+  const [history, setHistory] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [expanded, setExpanded] = useState(null);
+
+  useEffect(() => {
+    async function fetchHistory() {
+      try {
+        const data = await api('/api/history?limit=20');
+        setHistory(data.games || []);
+      } catch (err) {
+        console.error('Failed to fetch game history:', err);
+      }
+      setLoading(false);
+    }
+    fetchHistory();
+  }, []);
+
+  const getTeamConfigDisplay = (config) => {
+    const parts = [];
+    if (config.spymaster) {
+      const sm = config.spymaster;
+      if (sm.type === 'ai') {
+        parts.push(`SM: ${sm.model || 'AI'}${sm.reasoning ? ` (${sm.reasoning})` : ''}`);
+      } else {
+        parts.push('SM: Human');
+      }
+    }
+    if (config.guesser) {
+      const g = config.guesser;
+      if (g.type === 'ai') {
+        parts.push(`G: ${g.model || 'AI'}${g.reasoning ? ` (${g.reasoning})` : ''}`);
+      } else {
+        parts.push('G: Human');
+      }
+    }
+    return parts.join(', ');
+  };
+
+  const getEndReasonDisplay = (reason, winner) => {
+    switch (reason) {
+      case 'assassin': return '💀 Assassin hit';
+      case 'all_found': return `${winner === 'red' ? '🔴' : '🔵'} Found all words`;
+      case 'opponent_found_all': return `${winner === 'red' ? '🔴' : '🔵'} Opponent helped`;
+      default: return reason;
+    }
+  };
+
+  if (loading) {
+    return html`<div class="game-history"><h2>Game History</h2><p class="loading-text">Loading history...</p></div>`;
+  }
+
+  if (history.length === 0) {
+    return html`<div class="game-history"><h2>Game History</h2><p class="no-games">No completed games yet.</p></div>`;
+  }
+
+  return html`
+    <div class="game-history">
+      <h2>Game History</h2>
+      <div class="history-list">
+        ${history.map((game, idx) => html`
+          <div
+            class="history-card ${game.winner}"
+            onClick=${() => setExpanded(expanded === idx ? null : idx)}
+          >
+            <div class="history-header">
+              <span class="winner-badge ${game.winner}">
+                ${game.winner === 'red' ? '🔴 RED' : '🔵 BLUE'} WINS
+              </span>
+              <span class="history-date">${formatDate(game.finishedAt)}</span>
+            </div>
+
+            <div class="history-summary">
+              <div class="history-score">
+                <span class="score-team red">${9 - game.redFinalScore}</span>
+                <span class="score-divider">-</span>
+                <span class="score-team blue">${8 - game.blueFinalScore}</span>
+                <span class="score-label">found</span>
+              </div>
+              <div class="history-stats-brief">
+                <span>${game.totalTurns} turns</span>
+                <span>${formatDuration(game.durationSeconds)}</span>
+              </div>
+            </div>
+
+            ${expanded === idx && html`
+              <div class="history-details">
+                <div class="team-details red">
+                  <h4>🔴 Red Team</h4>
+                  <div class="detail-row">
+                    <span class="detail-label">Config:</span>
+                    <span class="detail-value">${getTeamConfigDisplay(game.redConfig)}</span>
+                  </div>
+                  ${game.redPlayers.length > 0 && html`
+                    <div class="detail-row">
+                      <span class="detail-label">Players:</span>
+                      <span class="detail-value">${game.redPlayers.join(', ')}</span>
+                    </div>
+                  `}
+                  <div class="detail-row">
+                    <span class="detail-label">Clues:</span>
+                    <span class="detail-value">
+                      ${game.redClueStats.count} clues, avg ${game.redClueStats.avgNumber.toFixed(1)}
+                      ${game.redClueStats.stdNumber > 0 ? ` (±${game.redClueStats.stdNumber.toFixed(1)})` : ''}
+                    </span>
+                  </div>
+                </div>
+
+                <div class="team-details blue">
+                  <h4>🔵 Blue Team</h4>
+                  <div class="detail-row">
+                    <span class="detail-label">Config:</span>
+                    <span class="detail-value">${getTeamConfigDisplay(game.blueConfig)}</span>
+                  </div>
+                  ${game.bluePlayers.length > 0 && html`
+                    <div class="detail-row">
+                      <span class="detail-label">Players:</span>
+                      <span class="detail-value">${game.bluePlayers.join(', ')}</span>
+                    </div>
+                  `}
+                  <div class="detail-row">
+                    <span class="detail-label">Clues:</span>
+                    <span class="detail-value">
+                      ${game.blueClueStats.count} clues, avg ${game.blueClueStats.avgNumber.toFixed(1)}
+                      ${game.blueClueStats.stdNumber > 0 ? ` (±${game.blueClueStats.stdNumber.toFixed(1)})` : ''}
+                    </span>
+                  </div>
+                </div>
+
+                <div class="end-reason">
+                  ${getEndReasonDisplay(game.endReason, game.winner)}
+                </div>
+              </div>
+            `}
+
+            <div class="expand-hint">${expanded === idx ? '▲ Less' : '▼ More'}</div>
+          </div>
+        `)}
+      </div>
     </div>
   `;
 }
@@ -1179,6 +1354,9 @@ function Game({ roomCode, player, isSpymaster, onLeave }) {
           // Get the AI reasoning from the first guess that has it (they share the same reasoning)
           // Only show if showAIReasoning is enabled (defaults to true)
           const aiReasoning = gameState.showAIReasoning !== false ? clue.guesses?.find(g => g.aiReasoning)?.aiReasoning : null;
+          // Show spymaster reasoning if enabled (off by default)
+          const spymasterReasoning = gameState.showSpymasterReasoning === true ? clue.spymasterReasoning : null;
+          const riskAssessment = gameState.showSpymasterReasoning === true ? clue.riskAssessment : null;
           return html`
             <div class="history-item">
               <div class="history-row">
@@ -1192,9 +1370,15 @@ function Game({ roomCode, player, isSpymaster, onLeave }) {
                   `)}
                 </div>
               ` : null}
+              ${spymasterReasoning ? html`
+                <div class="ai-reasoning spymaster-reasoning" style="margin-top: 0.5rem; padding: 0.5rem; background: #e8f4fd; border-radius: 4px; font-size: 0.8rem; color: #1565c0; border-left: 3px solid #1976d2;">
+                  <strong>Spymaster reasoning:</strong> ${spymasterReasoning}
+                  ${riskAssessment ? html`<div style="margin-top: 0.25rem;"><strong>Risk assessment:</strong> ${riskAssessment}</div>` : null}
+                </div>
+              ` : null}
               ${aiReasoning ? html`
                 <div class="ai-reasoning" style="margin-top: 0.5rem; padding: 0.5rem; background: #f5f5f5; border-radius: 4px; font-size: 0.8rem; color: #666;">
-                  <strong>AI reasoning:</strong> ${aiReasoning}
+                  <strong>Guesser reasoning:</strong> ${aiReasoning}
                 </div>
               ` : null}
             </div>
@@ -1249,6 +1433,18 @@ function HostView({ roomCode, onLeave }) {
       fetchState();
     } catch (err) {
       console.error('Toggle AI reasoning error:', err);
+    }
+  };
+
+  const toggleSpymasterReasoning = async (showSpymasterReasoning) => {
+    try {
+      await api(`/api/games/${roomCode}/toggle-spymaster-reasoning`, {
+        method: 'POST',
+        body: JSON.stringify({ showSpymasterReasoning }),
+      });
+      fetchState();
+    } catch (err) {
+      console.error('Toggle spymaster reasoning error:', err);
     }
   };
 
@@ -1344,6 +1540,14 @@ function HostView({ roomCode, onLeave }) {
               onChange=${(e) => toggleAIReasoning(e.target.checked)}
             />
             <span>Show AI guesser reasoning in clue history</span>
+          </label>
+          <label style="display: flex; gap: 0.75rem; align-items: center; cursor: pointer; padding: 0.5rem 0;">
+            <input
+              type="checkbox"
+              checked=${gameState.showSpymasterReasoning === true}
+              onChange=${(e) => toggleSpymasterReasoning(e.target.checked)}
+            />
+            <span>Show AI spymaster reasoning (debug mode)</span>
           </label>
 
           <h3 style="margin: 1rem 0 0.75rem 0;">Reset Seats</h3>
@@ -1445,6 +1649,9 @@ function HostView({ roomCode, onLeave }) {
         <h3>Clue History</h3>
         ${gameState.clueHistory.map(clue => {
           const aiReasoning = gameState.showAIReasoning !== false ? clue.guesses?.find(g => g.aiReasoning)?.aiReasoning : null;
+          // Show spymaster reasoning if enabled (off by default)
+          const spymasterReasoning = gameState.showSpymasterReasoning === true ? clue.spymasterReasoning : null;
+          const riskAssessment = gameState.showSpymasterReasoning === true ? clue.riskAssessment : null;
           return html`
             <div class="history-item">
               <div class="history-row">
@@ -1458,9 +1665,15 @@ function HostView({ roomCode, onLeave }) {
                   `)}
                 </div>
               ` : null}
+              ${spymasterReasoning ? html`
+                <div class="ai-reasoning spymaster-reasoning" style="margin-top: 0.5rem; padding: 0.5rem; background: #e8f4fd; border-radius: 4px; font-size: 0.8rem; color: #1565c0; border-left: 3px solid #1976d2;">
+                  <strong>Spymaster reasoning:</strong> ${spymasterReasoning}
+                  ${riskAssessment ? html`<div style="margin-top: 0.25rem;"><strong>Risk assessment:</strong> ${riskAssessment}</div>` : null}
+                </div>
+              ` : null}
               ${aiReasoning ? html`
                 <div class="ai-reasoning" style="margin-top: 0.5rem; padding: 0.5rem; background: #f5f5f5; border-radius: 4px; font-size: 0.8rem; color: #666;">
-                  <strong>AI reasoning:</strong> ${aiReasoning}
+                  <strong>Guesser reasoning:</strong> ${aiReasoning}
                 </div>
               ` : null}
             </div>

@@ -18,6 +18,12 @@ class_name = "GameRoom"
 binding = "GAME_REGISTRY"
 id = "70e2c20cf95a48ddad55eda8d15c2d8a"
 
+# D1 database for game history
+[[d1_databases]]
+binding = "GAME_HISTORY"
+database_name = "codenames-history"
+database_id = "aca551ca-7cce-4e11-9701-4e22aeff6000"
+
 # Migrations for Durable Objects (using SQLite for free plan compatibility)
 [[migrations]]
 tag = "v1"

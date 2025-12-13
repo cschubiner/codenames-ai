@@ -25,6 +25,7 @@ import wordlist from '../../shared/wordlist.json';
 
 interface Env {
   OPENAI_API_KEY?: string;
+  GAME_HISTORY?: D1Database;
 }
 
 export class GameRoom {
@@ -111,6 +112,10 @@ export class GameRoom {
         return this.handleToggleAIReasoning(request);
       }
 
+      if (method === 'POST' && path === '/toggle-spymaster-reasoning') {
+        return this.handleToggleSpymasterReasoning(request);
+      }
+
       if (method === 'POST' && path === '/set-assassin-behavior') {
         return this.handleSetAssassinBehavior(request);
       }
@@ -139,6 +144,7 @@ export class GameRoom {
 
     if (typeof gs.allowHumanAIHelp !== 'boolean') gs.allowHumanAIHelp = false;
     if (typeof gs.showAIReasoning !== 'boolean') gs.showAIReasoning = true;
+    if (typeof gs.showSpymasterReasoning !== 'boolean') gs.showSpymasterReasoning = false;
     if (!gs.assassinBehavior || !['instant_loss', 'reveal_opponent', 'add_own_cards'].includes(gs.assassinBehavior)) {
       gs.assassinBehavior = 'instant_loss';
     }
@@ -179,6 +185,7 @@ export class GameRoom {
       phase: 'setup',
       allowHumanAIHelp: false,
       showAIReasoning: true,
+      showSpymasterReasoning: false,
       assassinBehavior: 'instant_loss',
       roleConfig: {
         redSpymaster: 'human',
@@ -471,6 +478,18 @@ export class GameRoom {
     if (gameOver) {
       this.gameState!.phase = 'finished';
       this.gameState!.winner = winner;
+
+      // Determine end reason and save to history
+      let endReason: 'all_found' | 'assassin' | 'opponent_found_all';
+      if (cardType === 'assassin' && this.gameState!.assassinBehavior === 'instant_loss') {
+        endReason = 'assassin';
+      } else if (winner === currentTeam) {
+        endReason = 'all_found';
+      } else {
+        endReason = 'opponent_found_all';
+      }
+      // Fire and forget - don't block the response
+      this.saveCompletedGame(endReason).catch(console.error);
     }
 
     if (turnEnded && !gameOver) {
@@ -542,6 +561,20 @@ export class GameRoom {
     return jsonResponse({ gameState: this.getPublicState() });
   }
 
+  private async handleToggleSpymasterReasoning(request: Request): Promise<Response> {
+    const body = await request.json() as { showSpymasterReasoning: boolean };
+
+    if (typeof body.showSpymasterReasoning !== 'boolean') {
+      return jsonResponse({ error: 'showSpymasterReasoning must be a boolean' }, 400);
+    }
+
+    this.gameState!.showSpymasterReasoning = body.showSpymasterReasoning;
+    this.gameState!.updatedAt = Date.now();
+    await this.saveState();
+
+    return jsonResponse({ gameState: this.getPublicState() });
+  }
+
   private async handleSetAssassinBehavior(request: Request): Promise<Response> {
     if (this.gameState!.phase !== 'setup') {
       return jsonResponse({ error: 'Can only change assassin behavior during setup' }, 400);
@@ -607,6 +640,8 @@ export class GameRoom {
         number: this.pendingAIClue.number,
         team,
         intendedTargets: this.pendingAIClue.intendedTargets,
+        spymasterReasoning: this.pendingAIClue.reasoning,
+        riskAssessment: this.pendingAIClue.riskAssessment,
         guesses: [],
       };
 
@@ -916,6 +951,19 @@ export class GameRoom {
       if (gameOver) {
         this.gameState!.phase = 'finished';
         this.gameState!.winner = winner;
+
+        // Determine end reason and save to history
+        const lastGuessResult = guessResults[guessResults.length - 1];
+        let endReason: 'all_found' | 'assassin' | 'opponent_found_all';
+        if (lastGuessResult?.cardType === 'assassin' && this.gameState!.assassinBehavior === 'instant_loss') {
+          endReason = 'assassin';
+        } else if (winner === currentTeam) {
+          endReason = 'all_found';
+        } else {
+          endReason = 'opponent_found_all';
+        }
+        // Fire and forget - don't block the response
+        this.saveCompletedGame(endReason).catch(console.error);
       }
 
       if (!gameOver) {
@@ -1060,6 +1108,7 @@ export class GameRoom {
       phase: gs.phase,
       allowHumanAIHelp: gs.allowHumanAIHelp,
       showAIReasoning: gs.showAIReasoning,
+      showSpymasterReasoning: gs.showSpymasterReasoning,
       assassinBehavior: gs.assassinBehavior,
       roleConfig: gs.roleConfig,
       modelConfig: gs.modelConfig,
@@ -1088,6 +1137,105 @@ export class GameRoom {
 
   private async saveState(): Promise<void> {
     await this.state.storage.put('gameState', this.gameState);
+  }
+
+  private async saveCompletedGame(endReason: 'all_found' | 'assassin' | 'opponent_found_all'): Promise<void> {
+    if (!this.env.GAME_HISTORY) {
+      console.log('GAME_HISTORY D1 not configured, skipping save');
+      return;
+    }
+
+    const gs = this.gameState!;
+
+    // Calculate clue stats for each team
+    const calcClueStats = (team: Team) => {
+      const teamClues = gs.clueHistory.filter(c => c.team === team);
+      const numbers = teamClues.map(c => c.number);
+      const count = numbers.length;
+
+      if (count === 0) {
+        return { count: 0, avgNumber: 0, stdNumber: 0, clues: [] };
+      }
+
+      const avgNumber = numbers.reduce((a, b) => a + b, 0) / count;
+      const variance = numbers.reduce((sum, n) => sum + Math.pow(n - avgNumber, 2), 0) / count;
+      const stdNumber = Math.sqrt(variance);
+
+      return {
+        count,
+        avgNumber: Math.round(avgNumber * 100) / 100,
+        stdNumber: Math.round(stdNumber * 100) / 100,
+        clues: teamClues.map(c => ({ word: c.word, number: c.number })),
+      };
+    };
+
+    // Count turns per team
+    const redTurns = gs.clueHistory.filter(c => c.team === 'red').length;
+    const blueTurns = gs.clueHistory.filter(c => c.team === 'blue').length;
+
+    // Build team configs
+    const buildTeamConfig = (team: Team) => {
+      const spymasterKey = `${team}Spymaster` as keyof typeof gs.roleConfig;
+      const guesserKey = `${team}Guesser` as keyof typeof gs.roleConfig;
+
+      return {
+        spymaster: {
+          type: gs.roleConfig[spymasterKey],
+          model: gs.modelConfig[spymasterKey],
+          reasoning: gs.reasoningEffortConfig[spymasterKey] || null,
+        },
+        guesser: {
+          type: gs.roleConfig[guesserKey],
+          model: gs.modelConfig[guesserKey],
+          reasoning: gs.reasoningEffortConfig[guesserKey] || null,
+        },
+      };
+    };
+
+    // Get player names by team
+    const redPlayers = gs.players.filter(p => p.team === 'red').map(p => p.name);
+    const bluePlayers = gs.players.filter(p => p.team === 'blue').map(p => p.name);
+
+    const finishedAt = Date.now();
+    const durationSeconds = Math.round((finishedAt - gs.createdAt) / 1000);
+
+    try {
+      await this.env.GAME_HISTORY.prepare(`
+        INSERT INTO game_history (
+          room_code, winner, red_final_score, blue_final_score,
+          assassin_behavior, red_config, blue_config,
+          red_players, blue_players,
+          total_turns, red_turns, blue_turns,
+          red_clue_stats, blue_clue_stats,
+          end_reason, started_at, finished_at, duration_seconds,
+          clue_history
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).bind(
+        gs.roomCode,
+        gs.winner,
+        gs.redRemaining,
+        gs.blueRemaining,
+        gs.assassinBehavior,
+        JSON.stringify(buildTeamConfig('red')),
+        JSON.stringify(buildTeamConfig('blue')),
+        JSON.stringify(redPlayers),
+        JSON.stringify(bluePlayers),
+        redTurns + blueTurns,
+        redTurns,
+        blueTurns,
+        JSON.stringify(calcClueStats('red')),
+        JSON.stringify(calcClueStats('blue')),
+        endReason,
+        gs.createdAt,
+        finishedAt,
+        durationSeconds,
+        JSON.stringify(gs.clueHistory)
+      ).run();
+
+      console.log(`Saved completed game ${gs.roomCode} to history`);
+    } catch (error) {
+      console.error('Failed to save game history:', error);
+    }
   }
 }
 

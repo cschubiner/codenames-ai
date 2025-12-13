@@ -11,6 +11,7 @@ export { GameRoom } from './game';
 interface Env {
   GAME_ROOM: DurableObjectNamespace;
   GAME_REGISTRY: KVNamespace;
+  GAME_HISTORY: D1Database;
   OPENAI_API_KEY?: string;
 }
 
@@ -373,6 +374,24 @@ app.post('/api/games/:code/toggle-ai-reasoning', async (c) => {
   return c.json(data, response.status as any);
 });
 
+// Toggle spymaster reasoning visibility
+app.post('/api/games/:code/toggle-spymaster-reasoning', async (c) => {
+  const roomCode = c.req.param('code').toUpperCase();
+  const body = await c.req.json();
+
+  const id = c.env.GAME_ROOM.idFromName(roomCode);
+  const stub = c.env.GAME_ROOM.get(id);
+
+  const response = await stub.fetch(new Request('http://internal/toggle-spymaster-reasoning', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  }));
+
+  const data = await response.json();
+  return c.json(data, response.status as any);
+});
+
 // Set assassin behavior
 app.post('/api/games/:code/set-assassin-behavior', async (c) => {
   const roomCode = c.req.param('code').toUpperCase();
@@ -389,6 +408,64 @@ app.post('/api/games/:code/set-assassin-behavior', async (c) => {
 
   const data = await response.json();
   return c.json(data, response.status as any);
+});
+
+// Get game history
+app.get('/api/history', async (c) => {
+  try {
+    const limit = Math.min(parseInt(c.req.query('limit') || '50'), 100);
+    const offset = parseInt(c.req.query('offset') || '0');
+
+    const results = await c.env.GAME_HISTORY.prepare(`
+      SELECT
+        id, room_code, winner, red_final_score, blue_final_score,
+        assassin_behavior, red_config, blue_config, red_players, blue_players,
+        total_turns, red_turns, blue_turns, red_clue_stats, blue_clue_stats,
+        end_reason, started_at, finished_at, duration_seconds, created_at
+      FROM game_history
+      ORDER BY finished_at DESC
+      LIMIT ? OFFSET ?
+    `).bind(limit, offset).all();
+
+    // Parse JSON fields
+    const games = results.results.map((row: any) => ({
+      id: row.id,
+      roomCode: row.room_code,
+      winner: row.winner,
+      redFinalScore: row.red_final_score,
+      blueFinalScore: row.blue_final_score,
+      assassinBehavior: row.assassin_behavior,
+      redConfig: JSON.parse(row.red_config),
+      blueConfig: JSON.parse(row.blue_config),
+      redPlayers: JSON.parse(row.red_players),
+      bluePlayers: JSON.parse(row.blue_players),
+      totalTurns: row.total_turns,
+      redTurns: row.red_turns,
+      blueTurns: row.blue_turns,
+      redClueStats: JSON.parse(row.red_clue_stats),
+      blueClueStats: JSON.parse(row.blue_clue_stats),
+      endReason: row.end_reason,
+      startedAt: row.started_at,
+      finishedAt: row.finished_at,
+      durationSeconds: row.duration_seconds,
+      createdAt: row.created_at,
+    }));
+
+    // Get total count for pagination
+    const countResult = await c.env.GAME_HISTORY.prepare(
+      'SELECT COUNT(*) as count FROM game_history'
+    ).first();
+
+    return c.json({
+      games,
+      total: countResult?.count || 0,
+      limit,
+      offset,
+    });
+  } catch (err) {
+    console.error('Error fetching game history:', err);
+    return c.json({ games: [], total: 0, error: String(err) });
+  }
 });
 
 export default app;
