@@ -8,6 +8,26 @@ const html = htm.bind(h);
 // API configuration - production URL with local development fallback
 const API_BASE = window.CODENAMES_API_URL || 'https://codenames-ai.cschubiner.workers.dev';
 
+// Presets (local to this browser/device)
+const PRESETS_STORAGE_KEY = 'codenames.presets.v1';
+function loadPresets() {
+  try {
+    const raw = localStorage.getItem(PRESETS_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+function persistPresets(presets) {
+  try {
+    localStorage.setItem(PRESETS_STORAGE_KEY, JSON.stringify(presets));
+  } catch {
+    // Ignore storage failures (private mode, etc.)
+  }
+}
+
 // API helpers
 async function api(endpoint, options = {}) {
   const url = `${API_BASE}${endpoint}`;
@@ -645,6 +665,17 @@ function Setup({ gameState, onConfigure, onStart, onBack, error, roomCode }) {
   const [simulationCount, setSimulationCount] = useState(gameState?.simulationCount || 0);
   const [simulationModel, setSimulationModel] = useState(gameState?.simulationModel || 'gpt-4o');
 
+  // Presets UI/state (saved in localStorage on this device)
+  const [presets, setPresets] = useState([]);
+  const [selectedPresetId, setSelectedPresetId] = useState('');
+  const [presetName, setPresetName] = useState('');
+
+  useEffect(() => {
+    const loaded = loadPresets();
+    setPresets(loaded);
+    if (loaded.length > 0) setSelectedPresetId(loaded[0].id);
+  }, []);
+
   // Sync roleConfig from server updates (e.g., when players join)
   useEffect(() => {
     if (gameState?.roleConfig) {
@@ -797,6 +828,88 @@ function Setup({ gameState, onConfigure, onStart, onBack, error, roomCode }) {
       p.team === r.team && p.role === r.key.replace(r.team, '').toLowerCase()
     ));
 
+  const currentPresetSettings = () => ({
+    roleConfig,
+    multiModelConfig,
+    allowHumanAIHelp,
+    giveAIPastTurnInfo,
+    assassinBehavior,
+    turnTimer,
+    simulationCount,
+    simulationModel,
+  });
+
+  const saveNewPreset = () => {
+    const name = presetName.trim();
+    if (!name) {
+      alert('Please enter a preset name');
+      return;
+    }
+    const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    const next = [
+      { id, name, createdAt: Date.now(), updatedAt: Date.now(), settings: currentPresetSettings() },
+      ...presets,
+    ];
+    setPresets(next);
+    setSelectedPresetId(id);
+    setPresetName('');
+    persistPresets(next);
+  };
+
+  const updateSelectedPreset = () => {
+    if (!selectedPresetId) return;
+    const next = presets.map(p => p.id === selectedPresetId
+      ? { ...p, updatedAt: Date.now(), settings: currentPresetSettings() }
+      : p
+    );
+    setPresets(next);
+    persistPresets(next);
+  };
+
+  const deleteSelectedPreset = () => {
+    if (!selectedPresetId) return;
+    const preset = presets.find(p => p.id === selectedPresetId);
+    if (!preset) return;
+    if (!confirm(`Delete preset "${preset.name}"?`)) return;
+    const next = presets.filter(p => p.id !== selectedPresetId);
+    setPresets(next);
+    setSelectedPresetId(next[0]?.id || '');
+    persistPresets(next);
+  };
+
+  const loadSelectedPreset = async () => {
+    if (!selectedPresetId) return;
+    const preset = presets.find(p => p.id === selectedPresetId);
+    if (!preset?.settings) return;
+    const s = preset.settings;
+
+    // Update local state immediately for UI
+    if (s.roleConfig) setRoleConfig(s.roleConfig);
+    if (s.multiModelConfig) setMultiModelConfig(s.multiModelConfig);
+    if (typeof s.allowHumanAIHelp === 'boolean') setAllowHumanAIHelp(s.allowHumanAIHelp);
+    if (typeof s.giveAIPastTurnInfo === 'boolean') setGiveAIPastTurnInfo(s.giveAIPastTurnInfo);
+    if (typeof s.simulationCount === 'number') setSimulationCount(s.simulationCount);
+    if (typeof s.simulationModel === 'string') setSimulationModel(s.simulationModel);
+    if (typeof s.assassinBehavior === 'string') setAssassinBehavior(s.assassinBehavior);
+    if ('turnTimer' in s) setTurnTimer(s.turnTimer);
+
+    // Reset local textarea state so it matches loaded model entries
+    setLocalInstructions({});
+    setExpandedInstructions({});
+
+    // Persist to server
+    onConfigure({
+      roleConfig: s.roleConfig || roleConfig,
+      multiModelConfig: s.multiModelConfig || multiModelConfig,
+      allowHumanAIHelp: typeof s.allowHumanAIHelp === 'boolean' ? s.allowHumanAIHelp : allowHumanAIHelp,
+      giveAIPastTurnInfo: typeof s.giveAIPastTurnInfo === 'boolean' ? s.giveAIPastTurnInfo : giveAIPastTurnInfo,
+      simulationCount: typeof s.simulationCount === 'number' ? s.simulationCount : simulationCount,
+      simulationModel: typeof s.simulationModel === 'string' ? s.simulationModel : simulationModel,
+    });
+    if (typeof s.assassinBehavior === 'string') await updateAssassinBehavior(s.assassinBehavior);
+    if ('turnTimer' in s) await updateTurnTimer(s.turnTimer);
+  };
+
   return html`
     <div class="setup container">
       <button class="btn btn-outline btn-small" onClick=${onBack}>← Back</button>
@@ -811,6 +924,44 @@ function Setup({ gameState, onConfigure, onStart, onBack, error, roomCode }) {
         <p style="margin-top: 0.5rem; color: var(--text-light);">
           Share this code with other players
         </p>
+      </div>
+
+      <div style="margin-bottom: 1rem; padding: 1rem; background: #f5f5f5; border-radius: 8px;">
+        <div style="font-weight: 600; margin-bottom: 0.75rem;">Presets</div>
+        <div style="display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center;">
+          <select
+            value=${selectedPresetId}
+            onChange=${(e) => setSelectedPresetId(e.target.value)}
+            style="flex: 1; min-width: 220px; padding: 0.5rem;"
+          >
+            <option value="">Select a preset…</option>
+            ${presets.map(p => html`<option value=${p.id}>${p.name}</option>`)}
+          </select>
+          <button class="btn btn-outline btn-small" onClick=${loadSelectedPreset} disabled=${!selectedPresetId}>
+            Load
+          </button>
+          <button class="btn btn-outline btn-small" onClick=${updateSelectedPreset} disabled=${!selectedPresetId}>
+            Save
+          </button>
+          <button class="btn btn-outline btn-small" onClick=${deleteSelectedPreset} disabled=${!selectedPresetId}>
+            Delete
+          </button>
+        </div>
+        <div style="display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center; margin-top: 0.75rem;">
+          <input
+            type="text"
+            value=${presetName}
+            onInput=${(e) => setPresetName(e.target.value)}
+            placeholder="New preset name"
+            style="flex: 1; min-width: 220px; padding: 0.5rem;"
+          />
+          <button class="btn btn-blue btn-small" onClick=${saveNewPreset}>
+            Save As New
+          </button>
+        </div>
+        <div style="margin-top: 0.5rem; font-size: 0.85rem; color: var(--text-light);">
+          Saved locally on this device (not shared with other players).
+        </div>
       </div>
 
       <h3>Configure Roles</h3>
