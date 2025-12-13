@@ -2071,6 +2071,11 @@ function HostView({ roomCode, onLeave }) {
                         +${(result.outstandingCount * 0.4).toFixed(2)} outstanding credit (${result.outstandingCount} unhinted)
                       </div>
                     `}
+                    ${result.opponentEndPenalty < 0 && html`
+                      <div style="font-size: 0.85rem; color: #f44336;">
+                        ${result.opponentEndPenalty.toFixed(2)} opponent position penalty
+                      </div>
+                    `}
                   </div>
                 `)}
               </div>

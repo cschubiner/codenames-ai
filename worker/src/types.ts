@@ -255,6 +255,7 @@ export interface ClueSimulationResult {
     points: number;
   }>;
   outstandingCount: number;
+  opponentEndPenalty: number;
   totalScore: number;
 }
 

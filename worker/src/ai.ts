@@ -1089,9 +1089,10 @@ export function calculateSimulationScore(
   gameState: GameState,
   team: Team,
   assassinBehavior: AssassinBehavior
-): { guessResults: Array<{ word: string; cardType: CardType; points: number }>; outstandingCount: number; totalScore: number } {
+): { guessResults: Array<{ word: string; cardType: CardType; points: number }>; outstandingCount: number; totalScore: number; opponentEndPenalty: number } {
   const guessResults: Array<{ word: string; cardType: CardType; points: number }> = [];
   let correctGuesses = 0;
+  let opponentWordsGuessed = 0;
   let totalScore = 0;
 
   // stopAfter = 0 means pass turn immediately (no guesses)
@@ -1137,6 +1138,7 @@ export function calculateSimulationScore(
     } else {
       // Opponent's word
       points = -1.15;
+      opponentWordsGuessed++;
     }
 
     guessResults.push({ word: guess.word, cardType, points });
@@ -1155,7 +1157,28 @@ export function calculateSimulationScore(
   const outstandingScore = outstandingCount * 0.4;
   totalScore += outstandingScore;
 
-  return { guessResults, outstandingCount, totalScore };
+  // Calculate opponent end position penalty
+  // Penalty based on how many words opponent has left after this simulation
+  const opponentStartRemaining = team === 'red' ? gameState.blueRemaining : gameState.redRemaining;
+  const opponentEndRemaining = opponentStartRemaining - opponentWordsGuessed;
+
+  let opponentEndPenalty = 0;
+  if (opponentEndRemaining === 0) {
+    opponentEndPenalty = -999; // They won
+  } else if (opponentEndRemaining === 1) {
+    opponentEndPenalty = -9; // Very easy for them to win
+  } else if (opponentEndRemaining === 2) {
+    opponentEndPenalty = -3;
+  } else if (opponentEndRemaining === 3) {
+    opponentEndPenalty = -1;
+  } else if (opponentEndRemaining === 4) {
+    opponentEndPenalty = -0.3;
+  }
+  // 5+ remaining: no additional penalty
+
+  totalScore += opponentEndPenalty;
+
+  return { guessResults, outstandingCount, totalScore, opponentEndPenalty };
 }
 
 /**
@@ -1193,7 +1216,7 @@ export async function evaluateClueWithSimulation(
       simulationModel
     );
 
-    const { guessResults, outstandingCount, totalScore } = calculateSimulationScore(
+    const { guessResults, outstandingCount, totalScore, opponentEndPenalty } = calculateSimulationScore(
       candidate,
       guessResponse,
       gameState,
@@ -1207,6 +1230,7 @@ export async function evaluateClueWithSimulation(
       guesserReasoning: guessResponse.reasoning,
       guessResults,
       outstandingCount,
+      opponentEndPenalty,
       totalScore,
     };
   });
