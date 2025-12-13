@@ -732,7 +732,7 @@ function Game({ roomCode, player, isSpymaster, onLeave }) {
 
   useEffect(() => {
     fetchState();
-    return startAdaptivePolling(fetchState, 2000, 15000);
+    return startAdaptivePolling(fetchState, 4000, 15000);
   }, [fetchState]);
 
   // AI state - declared early so useEffect can reference it
@@ -1154,7 +1154,7 @@ function HostView({ roomCode, onLeave }) {
 
   useEffect(() => {
     fetchState();
-    return startAdaptivePolling(fetchState, 2000, 15000);
+    return startAdaptivePolling(fetchState, 4000, 15000);
   }, [fetchState]);
 
   const kickSeat = async (team, role) => {
