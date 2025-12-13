@@ -267,8 +267,12 @@ export class GameRoom {
       return jsonResponse({ error: 'Clue word is on the board' }, 400);
     }
 
-    if (body.number < 1 || body.number > 9) {
-      return jsonResponse({ error: 'Number must be 1-9' }, 400);
+    if (!Number.isInteger(body.number)) {
+      return jsonResponse({ error: 'Number must be an integer' }, 400);
+    }
+
+    if (body.number < 0 || body.number > 9) {
+      return jsonResponse({ error: 'Number must be 0-9' }, 400);
     }
 
     const clue: Clue = {

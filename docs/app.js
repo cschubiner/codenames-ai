@@ -471,15 +471,22 @@ function Board({ gameState, isSpymaster, canGuess, onGuess }) {
 // Clue Input Component
 function ClueInput({ onSubmit, team }) {
   const [word, setWord] = useState('');
-  const [number, setNumber] = useState(1);
-  const canSubmit = word.trim().length > 0;
+  const [numberText, setNumberText] = useState('');
+
+  const normalizedWord = word.trim();
+  const parsedNumber = numberText === '' ? null : Number(numberText);
+  const isValidNumber =
+    Number.isInteger(parsedNumber) &&
+    parsedNumber >= 0 &&
+    parsedNumber <= 9;
+  const canSubmit = normalizedWord.length > 0 && isValidNumber;
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (word.trim()) {
-      onSubmit(word.trim(), number);
+    if (canSubmit) {
+      onSubmit(normalizedWord, parsedNumber);
       setWord('');
-      setNumber(1);
+      setNumberText('');
     }
   };
 
@@ -493,10 +500,14 @@ function ClueInput({ onSubmit, team }) {
       />
       <input
         type="number"
-        value=${number}
-        onInput=${(e) => setNumber(parseInt(e.target.value) || 1)}
-        min="1"
+        inputMode="numeric"
+        pattern="[0-9]*"
+        value=${numberText}
+        onInput=${(e) => setNumberText(e.target.value)}
+        min="0"
         max="9"
+        step="1"
+        placeholder="0-9"
       />
       <button
         type="submit"
