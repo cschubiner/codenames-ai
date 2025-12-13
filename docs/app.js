@@ -986,11 +986,19 @@ function Game({ roomCode, player, isSpymaster, onLeave }) {
         </div>
       </div>
 
-      ${aiLoading && html`
-        <div style="text-align: center; margin: 1rem 0; padding: 0.75rem; background: #e3f2fd; border-radius: 8px; animation: pulse 1.5s ease-in-out infinite;">
-          <span>AI is thinking...</span>
-        </div>
-      `}
+      ${aiLoading && (() => {
+        // Determine which model is thinking based on game state
+        const isGuessingPhase = currentClue !== null;
+        const roleKey = isGuessingPhase
+          ? `${currentTeam}Guesser`
+          : `${currentTeam}Spymaster`;
+        const modelName = gameState.modelConfig?.[roleKey] || 'AI';
+        return html`
+          <div style="text-align: center; margin: 1rem 0; padding: 0.75rem; background: #e3f2fd; border-radius: 8px; animation: pulse 1.5s ease-in-out infinite;">
+            <span>${modelName} is thinking...</span>
+          </div>
+        `;
+      })()}
 
       ${currentClue && html`
         <div class="clue-display">
@@ -1342,11 +1350,19 @@ function HostView({ roomCode, onLeave }) {
         </div>
       </div>
 
-      ${aiLoading && html`
-        <div style="text-align: center; margin: 1rem 0; padding: 1rem; background: #e3f2fd; border-radius: 8px; font-size: 1.5rem; animation: pulse 1.5s ease-in-out infinite;">
-          AI is thinking...
-        </div>
-      `}
+      ${aiLoading && (() => {
+        // Determine which model is thinking based on game state
+        const isGuessingPhase = currentClue !== null;
+        const roleKey = isGuessingPhase
+          ? `${currentTeam}Guesser`
+          : `${currentTeam}Spymaster`;
+        const modelName = gameState.modelConfig?.[roleKey] || 'AI';
+        return html`
+          <div style="text-align: center; margin: 1rem 0; padding: 1rem; background: #e3f2fd; border-radius: 8px; font-size: 1.5rem; animation: pulse 1.5s ease-in-out infinite;">
+            ${modelName} is thinking...
+          </div>
+        `;
+      })()}
 
       ${currentClue && html`
         <div class="clue-display" style="font-size: 1.5rem;">
