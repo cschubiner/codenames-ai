@@ -1002,3 +1002,85 @@ body {
   color: var(--text-light);
   margin-top: 0.5rem;
 }
+
+/* Timing Display */
+.timing-display {
+  display: flex;
+  justify-content: center;
+  gap: 2rem;
+  margin: 1rem auto;
+  max-width: 600px;
+}
+
+.timing-team {
+  flex: 1;
+  background: var(--card-bg);
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+
+.timing-team.red {
+  border-top: 3px solid var(--red);
+}
+
+.timing-team.blue {
+  border-top: 3px solid var(--blue);
+}
+
+.timing-team-label {
+  font-weight: 700;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.5rem;
+  color: var(--text-light);
+}
+
+.timing-team.red .timing-team-label {
+  color: var(--red);
+}
+
+.timing-team.blue .timing-team-label {
+  color: var(--blue);
+}
+
+.timing-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.25rem 0;
+  font-size: 0.9rem;
+}
+
+.timing-row.active {
+  background: #e8f5e9;
+  margin: 0 -0.5rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+}
+
+.timing-row.active .timing-value {
+  font-weight: 700;
+  color: #2e7d32;
+}
+
+.timing-row.total {
+  border-top: 1px solid var(--border);
+  margin-top: 0.25rem;
+  padding-top: 0.5rem;
+  font-weight: 600;
+}
+
+.timing-label {
+  color: var(--text-light);
+}
+
+.timing-value {
+  font-family: 'Monaco', 'Consolas', monospace;
+  font-weight: 500;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}

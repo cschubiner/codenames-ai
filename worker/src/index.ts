@@ -421,7 +421,7 @@ app.get('/api/history', async (c) => {
         id, room_code, winner, red_final_score, blue_final_score,
         assassin_behavior, red_config, blue_config, red_players, blue_players,
         total_turns, red_turns, blue_turns, red_clue_stats, blue_clue_stats,
-        end_reason, started_at, finished_at, duration_seconds, created_at
+        end_reason, started_at, finished_at, duration_seconds, created_at, timing_stats
       FROM game_history
       ORDER BY finished_at DESC
       LIMIT ? OFFSET ?
@@ -449,6 +449,7 @@ app.get('/api/history', async (c) => {
       finishedAt: row.finished_at,
       durationSeconds: row.duration_seconds,
       createdAt: row.created_at,
+      timingStats: row.timing_stats ? JSON.parse(row.timing_stats) : null,
     }));
 
     // Get total count for pagination

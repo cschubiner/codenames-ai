@@ -153,6 +153,114 @@ function formatDuration(seconds) {
   return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
 }
 
+// Format milliseconds as mm:ss
+function formatMs(ms) {
+  const totalSeconds = Math.floor(ms / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+}
+
+// Live timer component that updates every second
+function LiveTimer({ phaseStartTime, accumulatedMs }) {
+  const [elapsed, setElapsed] = useState(0);
+
+  useEffect(() => {
+    if (!phaseStartTime) {
+      setElapsed(0);
+      return;
+    }
+
+    const update = () => {
+      setElapsed(Date.now() - phaseStartTime);
+    };
+    update();
+    const interval = setInterval(update, 1000);
+    return () => clearInterval(interval);
+  }, [phaseStartTime]);
+
+  const total = (accumulatedMs || 0) + elapsed;
+  return html`<span>${formatMs(total)}</span>`;
+}
+
+// Timing display for host view showing all team times
+function TimingDisplay({ gameState }) {
+  const { timing, phaseStartTime, turnPhase, currentTeam, phase } = gameState;
+
+  if (!timing || phase === 'setup') return null;
+
+  // Determine which timer is currently active
+  const isRedSpymasterActive = phase === 'playing' && currentTeam === 'red' && turnPhase === 'clue';
+  const isRedGuesserActive = phase === 'playing' && currentTeam === 'red' && turnPhase === 'guess';
+  const isBlueSpymasterActive = phase === 'playing' && currentTeam === 'blue' && turnPhase === 'clue';
+  const isBlueGuesserActive = phase === 'playing' && currentTeam === 'blue' && turnPhase === 'guess';
+
+  return html`
+    <div class="timing-display">
+      <div class="timing-team red">
+        <div class="timing-team-label">RED</div>
+        <div class="timing-row ${isRedSpymasterActive ? 'active' : ''}">
+          <span class="timing-label">Spymaster:</span>
+          <span class="timing-value">
+            ${isRedSpymasterActive
+              ? html`<${LiveTimer} phaseStartTime=${phaseStartTime} accumulatedMs=${timing.red.spymasterMs} />`
+              : formatMs(timing.red.spymasterMs)
+            }
+          </span>
+        </div>
+        <div class="timing-row ${isRedGuesserActive ? 'active' : ''}">
+          <span class="timing-label">Guesser:</span>
+          <span class="timing-value">
+            ${isRedGuesserActive
+              ? html`<${LiveTimer} phaseStartTime=${phaseStartTime} accumulatedMs=${timing.red.guesserMs} />`
+              : formatMs(timing.red.guesserMs)
+            }
+          </span>
+        </div>
+        <div class="timing-row total">
+          <span class="timing-label">Total:</span>
+          <span class="timing-value">
+            ${(isRedSpymasterActive || isRedGuesserActive)
+              ? html`<${LiveTimer} phaseStartTime=${phaseStartTime} accumulatedMs=${timing.red.spymasterMs + timing.red.guesserMs} />`
+              : formatMs(timing.red.spymasterMs + timing.red.guesserMs)
+            }
+          </span>
+        </div>
+      </div>
+      <div class="timing-team blue">
+        <div class="timing-team-label">BLUE</div>
+        <div class="timing-row ${isBlueSpymasterActive ? 'active' : ''}">
+          <span class="timing-label">Spymaster:</span>
+          <span class="timing-value">
+            ${isBlueSpymasterActive
+              ? html`<${LiveTimer} phaseStartTime=${phaseStartTime} accumulatedMs=${timing.blue.spymasterMs} />`
+              : formatMs(timing.blue.spymasterMs)
+            }
+          </span>
+        </div>
+        <div class="timing-row ${isBlueGuesserActive ? 'active' : ''}">
+          <span class="timing-label">Guesser:</span>
+          <span class="timing-value">
+            ${isBlueGuesserActive
+              ? html`<${LiveTimer} phaseStartTime=${phaseStartTime} accumulatedMs=${timing.blue.guesserMs} />`
+              : formatMs(timing.blue.guesserMs)
+            }
+          </span>
+        </div>
+        <div class="timing-row total">
+          <span class="timing-label">Total:</span>
+          <span class="timing-value">
+            ${(isBlueSpymasterActive || isBlueGuesserActive)
+              ? html`<${LiveTimer} phaseStartTime=${phaseStartTime} accumulatedMs=${timing.blue.spymasterMs + timing.blue.guesserMs} />`
+              : formatMs(timing.blue.spymasterMs + timing.blue.guesserMs)
+            }
+          </span>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 // Format date for display
 function formatDate(timestamp) {
   const date = new Date(timestamp);
@@ -278,6 +386,16 @@ function GameHistory() {
                       ${game.redClueStats.stdNumber > 0 ? ` (±${game.redClueStats.stdNumber.toFixed(1)})` : ''}
                     </span>
                   </div>
+                  ${game.timingStats?.red && html`
+                    <div class="detail-row">
+                      <span class="detail-label">Time:</span>
+                      <span class="detail-value">
+                        SM: ${formatMs(game.timingStats.red.spymasterMs)},
+                        G: ${formatMs(game.timingStats.red.guesserMs)}
+                        (Total: ${formatMs(game.timingStats.red.spymasterMs + game.timingStats.red.guesserMs)})
+                      </span>
+                    </div>
+                  `}
                 </div>
 
                 <div class="team-details blue">
@@ -299,6 +417,16 @@ function GameHistory() {
                       ${game.blueClueStats.stdNumber > 0 ? ` (±${game.blueClueStats.stdNumber.toFixed(1)})` : ''}
                     </span>
                   </div>
+                  ${game.timingStats?.blue && html`
+                    <div class="detail-row">
+                      <span class="detail-label">Time:</span>
+                      <span class="detail-value">
+                        SM: ${formatMs(game.timingStats.blue.spymasterMs)},
+                        G: ${formatMs(game.timingStats.blue.guesserMs)}
+                        (Total: ${formatMs(game.timingStats.blue.spymasterMs + game.timingStats.blue.guesserMs)})
+                      </span>
+                    </div>
+                  `}
                 </div>
 
                 <div class="end-reason">
@@ -1616,6 +1744,8 @@ function HostView({ roomCode, onLeave }) {
           🔵 ${blueRemaining}
         </div>
       </div>
+
+      <${TimingDisplay} gameState=${gameState} />
 
       ${aiLoading && (() => {
         // Determine which model is thinking based on game state

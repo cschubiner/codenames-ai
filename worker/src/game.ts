@@ -169,6 +169,16 @@ export class GameRoom {
     if (!Array.isArray(gs.clueHistory)) gs.clueHistory = [];
     if (!Array.isArray(gs.guessHistory)) gs.guessHistory = [];
 
+    // Timing fields
+    if (!gs.turnPhase) gs.turnPhase = gs.currentClue ? 'guess' : 'clue';
+    if (typeof gs.phaseStartTime !== 'number') gs.phaseStartTime = null;
+    if (!gs.timing) {
+      gs.timing = {
+        red: { spymasterMs: 0, guesserMs: 0 },
+        blue: { spymasterMs: 0, guesserMs: 0 },
+      };
+    }
+
     return gs as GameState;
   }
 
@@ -208,11 +218,17 @@ export class GameRoom {
       currentTeam: 'red',
       currentClue: null,
       guessesRemaining: 0,
+      turnPhase: 'clue',
       redRemaining: 9,
       blueRemaining: 8,
       winner: null,
       clueHistory: [],
       guessHistory: [],
+      phaseStartTime: null,
+      timing: {
+        red: { spymasterMs: 0, guesserMs: 0 },
+        blue: { spymasterMs: 0, guesserMs: 0 },
+      },
       createdAt: Date.now(),
       updatedAt: Date.now(),
     };
@@ -327,11 +343,34 @@ export class GameRoom {
     }
 
     this.gameState!.phase = 'playing';
+    this.gameState!.turnPhase = 'clue';
+    this.gameState!.phaseStartTime = Date.now(); // Start timing for first spymaster
     this.gameState!.updatedAt = Date.now();
 
     await this.saveState();
 
     return jsonResponse({ gameState: this.getPublicState() });
+  }
+
+  // Helper to record elapsed time for the current phase
+  private recordPhaseTime(): void {
+    if (!this.gameState!.phaseStartTime) return;
+
+    const elapsed = Date.now() - this.gameState!.phaseStartTime;
+    const team = this.gameState!.currentTeam;
+
+    if (this.gameState!.turnPhase === 'clue') {
+      this.gameState!.timing[team].spymasterMs += elapsed;
+    } else {
+      this.gameState!.timing[team].guesserMs += elapsed;
+    }
+
+    this.gameState!.phaseStartTime = null;
+  }
+
+  // Helper to start timing a new phase
+  private startPhaseTimer(): void {
+    this.gameState!.phaseStartTime = Date.now();
   }
 
   private async handleClue(request: Request): Promise<Response> {
@@ -365,6 +404,11 @@ export class GameRoom {
       team: this.gameState!.currentTeam,
       guesses: [],
     };
+
+    // Record spymaster time and switch to guess phase
+    this.recordPhaseTime();
+    this.gameState!.turnPhase = 'guess';
+    this.startPhaseTimer();
 
     this.gameState!.currentClue = clue;
     this.gameState!.guessesRemaining = body.number + 1;
@@ -476,6 +520,9 @@ export class GameRoom {
     }
 
     if (gameOver) {
+      // Record final guesser time before game ends
+      this.recordPhaseTime();
+
       this.gameState!.phase = 'finished';
       this.gameState!.winner = winner;
 
@@ -644,6 +691,11 @@ export class GameRoom {
         riskAssessment: this.pendingAIClue.riskAssessment,
         guesses: [],
       };
+
+      // Record spymaster time and switch to guess phase
+      this.recordPhaseTime();
+      this.gameState!.turnPhase = 'guess';
+      this.startPhaseTimer();
 
       this.gameState!.currentClue = clue;
       this.gameState!.guessesRemaining = clue.number + 1;
@@ -949,6 +1001,9 @@ export class GameRoom {
       }
 
       if (gameOver) {
+        // Record final guesser time before game ends
+        this.recordPhaseTime();
+
         this.gameState!.phase = 'finished';
         this.gameState!.winner = winner;
 
@@ -1057,12 +1112,20 @@ export class GameRoom {
   }
 
   private endTurn(): void {
+    // Record guesser time before switching teams
+    this.recordPhaseTime();
+
     this.gameState!.currentTeam = this.gameState!.currentTeam === 'red' ? 'blue' : 'red';
     this.gameState!.currentClue = null;
     this.gameState!.guessesRemaining = 0;
+    this.gameState!.turnPhase = 'clue';
     this.pendingAIClue = null;
     this.pendingAIClueTeam = null;
     this.pendingAIClueLoaded = true;
+
+    // Start timing for next team's spymaster
+    this.startPhaseTimer();
+
     // Best-effort cleanup; don't block turn progression on storage
     this.state.storage.delete('pendingAIClue').catch(() => {});
   }
@@ -1121,11 +1184,14 @@ export class GameRoom {
       currentTeam: gs.currentTeam,
       currentClue: gs.currentClue,
       guessesRemaining: gs.guessesRemaining,
+      turnPhase: gs.turnPhase,
       redRemaining: gs.redRemaining,
       blueRemaining: gs.blueRemaining,
       winner: gs.winner,
       clueHistory: gs.clueHistory,
       guessHistory: gs.guessHistory,
+      phaseStartTime: gs.phaseStartTime,
+      timing: gs.timing,
     };
 
     if (includeKey) {
@@ -1208,8 +1274,8 @@ export class GameRoom {
           total_turns, red_turns, blue_turns,
           red_clue_stats, blue_clue_stats,
           end_reason, started_at, finished_at, duration_seconds,
-          clue_history
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          clue_history, timing_stats
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).bind(
         gs.roomCode,
         gs.winner,
@@ -1229,7 +1295,8 @@ export class GameRoom {
         gs.createdAt,
         finishedAt,
         durationSeconds,
-        JSON.stringify(gs.clueHistory)
+        JSON.stringify(gs.clueHistory),
+        JSON.stringify(gs.timing)
       ).run();
 
       console.log(`Saved completed game ${gs.roomCode} to history`);

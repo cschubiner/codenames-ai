@@ -94,6 +94,7 @@ export interface GameState {
   currentTeam: Team;
   currentClue: Clue | null;
   guessesRemaining: number;
+  turnPhase: 'clue' | 'guess'; // Whether we're waiting for clue or guesses
 
   // Scores
   redRemaining: number;
@@ -105,6 +106,13 @@ export interface GameState {
   // History
   clueHistory: Clue[];
   guessHistory: Array<{ word: string; cardType: CardType; team: Team }>;
+
+  // Timing tracking
+  phaseStartTime: number | null; // When current phase (clue/guess) started
+  timing: {
+    red: { spymasterMs: number; guesserMs: number };
+    blue: { spymasterMs: number; guesserMs: number };
+  };
 
   // Timestamps
   createdAt: number;
@@ -176,11 +184,18 @@ export interface PublicGameState {
   currentTeam: Team;
   currentClue: Clue | null;
   guessesRemaining: number;
+  turnPhase: 'clue' | 'guess';
   redRemaining: number;
   blueRemaining: number;
   winner: Team | null;
   clueHistory: Clue[];
   guessHistory: Array<{ word: string; cardType: CardType; team: Team }>;
+  // Timing info
+  phaseStartTime: number | null;
+  timing: {
+    red: { spymasterMs: number; guesserMs: number };
+    blue: { spymasterMs: number; guesserMs: number };
+  };
 }
 
 // AI-related types
