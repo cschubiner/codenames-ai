@@ -184,6 +184,9 @@ function Setup({ gameState, onConfigure, onStart, onBack, error, roomCode }) {
 
   const [customInstructionsConfig, setCustomInstructionsConfig] = useState(gameState?.customInstructionsConfig || {});
 
+  // Local state for textarea editing (to avoid API calls on every keystroke)
+  const [localInstructions, setLocalInstructions] = useState({});
+
   const [expandedInstructions, setExpandedInstructions] = useState({});
 
   const [allowHumanAIHelp, setAllowHumanAIHelp] = useState(!!gameState?.allowHumanAIHelp);
@@ -405,8 +408,16 @@ function Setup({ gameState, onConfigure, onStart, onBack, error, roomCode }) {
                 ${expandedInstructions[role.key] && html`
                   <div style="margin-top: 0.5rem;">
                     <textarea
-                      value=${customInstructionsConfig[role.key] || ''}
-                      onInput=${(e) => updateCustomInstructions(role.key, e.target.value)}
+                      value=${localInstructions[role.key] !== undefined ? localInstructions[role.key] : (customInstructionsConfig[role.key] || '')}
+                      onInput=${(e) => setLocalInstructions(prev => ({ ...prev, [role.key]: e.target.value }))}
+                      onBlur=${(e) => {
+                        updateCustomInstructions(role.key, e.target.value);
+                        setLocalInstructions(prev => {
+                          const next = { ...prev };
+                          delete next[role.key];
+                          return next;
+                        });
+                      }}
                       placeholder="e.g., 'Be conservative', 'Take more risks', 'Focus on 2-word clues'..."
                       style="width: 100%; min-height: 60px; font-size: 0.85rem; padding: 0.5rem; border: 1px solid var(--border); border-radius: 4px; resize: vertical;"
                     />
