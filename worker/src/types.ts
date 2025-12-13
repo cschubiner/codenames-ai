@@ -241,6 +241,9 @@ export interface PublicGameState {
   // Pause state
   isPaused: boolean;
   pausedAt: number | null;
+  // Timestamps
+  createdAt: number;
+  updatedAt: number;
 }
 
 // AI-related types
@@ -250,6 +253,7 @@ export interface AIClueCandidate {
   intendedTargets: string[];
   reasoning: string;
   riskAssessment: string;
+  generatedByModel?: string; // Track which model generated this candidate
 }
 
 export interface AIGuessSuggestion {
@@ -268,6 +272,7 @@ export interface ClueSimulationResult {
   candidate: AIClueCandidate;
   simulatedGuesses: AIGuessSuggestion[];
   guesserReasoning: string;
+  simulationGuesserModel?: string; // Track which model simulated the guesses
   guessResults: Array<{
     word: string;
     cardType: CardType;

@@ -963,7 +963,11 @@ Strategy tips:
     reasoningEffort
   );
 
-  return result as AIClueCandidate;
+  // Add the model that generated this candidate
+  return {
+    ...result as AIClueCandidate,
+    generatedByModel: model,
+  };
 }
 
 /**
@@ -1235,6 +1239,7 @@ export async function evaluateClueWithSimulation(
       candidate,
       simulatedGuesses: guessResponse.suggestions,
       guesserReasoning: guessResponse.reasoning,
+      simulationGuesserModel: simulationModel, // Track which model simulated the guesses
       guessResults,
       outstandingCount,
       opponentEndPenalty,

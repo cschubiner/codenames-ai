@@ -162,6 +162,10 @@ export class GameRoom {
         return this.handleToggleSimulationDetails(request);
       }
 
+      if (method === 'GET' && path === '/replay-settings') {
+        return this.handleGetReplaySettings();
+      }
+
       // Background mode endpoints for long-running AI models
       if (method === 'GET' && path === '/ai-clue-status') {
         return this.handleAIClueStatus();
@@ -887,6 +891,27 @@ export class GameRoom {
     await this.saveState();
 
     return jsonResponse({ gameState: this.getPublicState() });
+  }
+
+  private handleGetReplaySettings(): Response {
+    // Return the current game settings for creating a replay game
+    const gs = this.gameState!;
+    return jsonResponse({
+      settings: {
+        roleConfig: gs.roleConfig,
+        modelConfig: gs.modelConfig,
+        reasoningEffortConfig: gs.reasoningEffortConfig,
+        customInstructionsConfig: gs.customInstructionsConfig,
+        multiModelConfig: gs.multiModelConfig,
+        allowHumanAIHelp: gs.allowHumanAIHelp,
+        giveAIPastTurnInfo: gs.giveAIPastTurnInfo,
+        assassinBehavior: gs.assassinBehavior,
+        turnTimer: gs.turnTimer,
+        simulationCount: gs.simulationCount,
+        simulationModel: gs.simulationModel,
+      },
+      players: gs.players,
+    });
   }
 
   private async handleAIClue(request: Request): Promise<Response> {
@@ -1744,6 +1769,8 @@ export class GameRoom {
       timing: gs.timing,
       isPaused: gs.isPaused,
       pausedAt: gs.pausedAt,
+      createdAt: gs.createdAt,
+      updatedAt: gs.updatedAt,
     };
 
     if (includeKey) {

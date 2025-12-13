@@ -118,6 +118,15 @@ body {
   color: white;
 }
 
+.btn-green {
+  background: #4caf50;
+  color: white;
+}
+
+.btn-green:hover {
+  background: #43a047;
+}
+
 .btn-neutral {
   background: var(--neutral);
   color: white;

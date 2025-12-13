@@ -96,8 +96,8 @@ async function updateGameRegistry(kv: KVNamespace, roomCode: string, gameState: 
 // List active games
 app.get('/api/games', async (c) => {
   try {
-    // List all keys in the registry
-    const list = await c.env.GAME_REGISTRY.list();
+    // List all game keys in the registry (with prefix filter)
+    const list = await c.env.GAME_REGISTRY.list({ prefix: 'game:' });
     const games: GameRegistryEntry[] = [];
 
     // Fetch each game's metadata
@@ -504,6 +504,78 @@ app.post('/api/games/:code/toggle-simulation-details', async (c) => {
 
   const data = await response.json();
   return c.json(data, response.status as any);
+});
+
+// Get replay settings for a game (to create a new game with same settings)
+app.get('/api/games/:code/replay-settings', async (c) => {
+  const roomCode = c.req.param('code').toUpperCase();
+
+  const id = c.env.GAME_ROOM.idFromName(roomCode);
+  const stub = c.env.GAME_ROOM.get(id);
+
+  const response = await stub.fetch(new Request('http://internal/replay-settings', {
+    method: 'GET',
+  }));
+
+  const data = await response.json();
+  return c.json(data, response.status as any);
+});
+
+// Create a replay game with settings from an existing game
+app.post('/api/games/:code/replay', async (c) => {
+  const oldRoomCode = c.req.param('code').toUpperCase();
+
+  // Get settings from the old game
+  const oldId = c.env.GAME_ROOM.idFromName(oldRoomCode);
+  const oldStub = c.env.GAME_ROOM.get(oldId);
+
+  const settingsResponse = await oldStub.fetch(new Request('http://internal/replay-settings', {
+    method: 'GET',
+  }));
+
+  if (!settingsResponse.ok) {
+    return c.json({ error: 'Failed to get replay settings' }, 500);
+  }
+
+  const { settings, players } = await settingsResponse.json() as { settings: any; players: any[] };
+
+  // Create a new game
+  const newRoomCode = generateRoomCode();
+  const newId = c.env.GAME_ROOM.idFromName(newRoomCode);
+  const newStub = c.env.GAME_ROOM.get(newId);
+
+  const createResponse = await newStub.fetch(new Request('http://internal/create', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ roomCode: newRoomCode }),
+  }));
+
+  if (!createResponse.ok) {
+    return c.json({ error: 'Failed to create new game' }, 500);
+  }
+
+  // Configure the new game with same settings
+  const configureResponse = await newStub.fetch(new Request('http://internal/configure', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(settings),
+  }));
+
+  const configData = await configureResponse.json() as any;
+
+  // Register the new game in KV
+  if (configureResponse.ok && configData.gameState) {
+    await updateGameRegistry(c.env.GAME_REGISTRY, newRoomCode, configData.gameState);
+  }
+
+  // Return the new room code and player info for reconnection
+  return c.json({
+    newRoomCode,
+    oldRoomCode,
+    settings,
+    players, // Return old players so frontend can re-join them
+    gameState: configData.gameState,
+  });
 });
 
 // Get game history
