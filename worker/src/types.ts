@@ -21,6 +21,22 @@ export interface ModelConfig {
   blueGuesser: string;
 }
 
+export type ReasoningEffort = 'low' | 'medium' | 'high';
+
+export interface ReasoningEffortConfig {
+  redSpymaster?: ReasoningEffort;
+  redGuesser?: ReasoningEffort;
+  blueSpymaster?: ReasoningEffort;
+  blueGuesser?: ReasoningEffort;
+}
+
+export interface CustomInstructionsConfig {
+  redSpymaster?: string;
+  redGuesser?: string;
+  blueSpymaster?: string;
+  blueGuesser?: string;
+}
+
 export interface Player {
   id: string;
   name: string;
@@ -34,7 +50,7 @@ export interface Clue {
   number: number;
   team: Team;
   intendedTargets?: string[];
-  guesses?: Array<{ word: string; cardType: CardType }>;
+  guesses?: Array<{ word: string; cardType: CardType; aiReasoning?: string }>;
 }
 
 export interface GuessResult {
@@ -57,6 +73,8 @@ export interface GameState {
   // Role configuration
   roleConfig: RoleConfig;
   modelConfig: ModelConfig;
+  reasoningEffortConfig: ReasoningEffortConfig;
+  customInstructionsConfig: CustomInstructionsConfig;
   players: Player[];
 
   // Board state
@@ -98,6 +116,8 @@ export interface CreateGameResponse {
 export interface ConfigureRolesRequest {
   roleConfig: RoleConfig;
   modelConfig?: ModelConfig;
+  reasoningEffortConfig?: ReasoningEffortConfig;
+  customInstructionsConfig?: CustomInstructionsConfig;
   allowHumanAIHelp?: boolean;
 }
 
@@ -135,6 +155,8 @@ export interface PublicGameState {
   allowHumanAIHelp: boolean;
   roleConfig: RoleConfig;
   modelConfig: ModelConfig;
+  reasoningEffortConfig: ReasoningEffortConfig;
+  customInstructionsConfig: CustomInstructionsConfig;
   players: Player[];
   words: string[];
   revealed: boolean[];

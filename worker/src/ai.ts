@@ -17,6 +17,9 @@ interface OpenAIResponse {
   }>;
 }
 
+// Models that support reasoning_effort parameter
+const REASONING_MODELS = ['gpt-5.1', 'gpt-5.2', 'gpt-5-mini', 'o3', 'o4-mini', 'o3-mini', 'o1', 'o1-mini'];
+
 /**
  * Call OpenAI API with structured output
  */
@@ -25,23 +28,37 @@ async function callOpenAI(
   messages: OpenAIMessage[],
   jsonSchema: object,
   model: string = 'gpt-4o-mini',
-  temperature: number = 0.7
+  temperature: number = 0.7,
+  reasoningEffort?: string
 ): Promise<any> {
+  const isReasoningModel = REASONING_MODELS.some(m => model.startsWith(m));
+
+  const body: any = {
+    model,
+    messages,
+    response_format: {
+      type: 'json_schema',
+      json_schema: jsonSchema,
+    },
+  };
+
+  // Only add temperature for non-reasoning models
+  if (!isReasoningModel) {
+    body.temperature = temperature;
+  }
+
+  // Add reasoning_effort for reasoning models
+  if (isReasoningModel && reasoningEffort) {
+    body.reasoning_effort = reasoningEffort;
+  }
+
   const response = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${apiKey}`,
     },
-    body: JSON.stringify({
-      model,
-      messages,
-      temperature,
-      response_format: {
-        type: 'json_schema',
-        json_schema: jsonSchema,
-      },
-    }),
+    body: JSON.stringify(body),
   });
 
   if (!response.ok) {
@@ -60,7 +77,9 @@ export async function generateAIClue(
   apiKey: string,
   gameState: GameState,
   team: Team,
-  model: string = 'gpt-4o'
+  model: string = 'gpt-4o',
+  reasoningEffort?: string,
+  customInstructions?: string
 ): Promise<AIClueCandidate> {
   // Get words by type
   const teamWords = gameState.words.filter((w, i) =>
@@ -74,7 +93,7 @@ export async function generateAIClue(
   );
   const assassinWord = gameState.words.find((w, i) => gameState.key[i] === 'assassin');
 
-  const prompt = `You are playing Codenames as the spymaster for the ${team.toUpperCase()} team.
+  let prompt = `You are playing Codenames as the spymaster for the ${team.toUpperCase()} team.
 
 ## Game Rules Reminder
 - Give a one-word clue and a number indicating how many words it relates to
@@ -103,6 +122,10 @@ Strategy tips:
 - Consider word associations your guesser might make
 - Balance between connecting many words vs. being too vague
 - It's often better to give a safe clue for 2 words than a risky clue for 4`;
+
+  if (customInstructions) {
+    prompt += `\n\n## Additional Instructions\n${customInstructions}`;
+  }
 
   const schema = {
     name: 'spymaster_clue',
@@ -137,15 +160,13 @@ Strategy tips:
     },
   };
 
-  // Some models (o3, o4-mini) don't support temperature
-  const supportsTemperature = !model.startsWith('o3') && !model.startsWith('o4');
-
   const result = await callOpenAI(
     apiKey,
     [{ role: 'user', content: prompt }],
     schema,
     model,
-    supportsTemperature ? 0.7 : 1
+    0.7,
+    reasoningEffort
   );
 
   return result as AIClueCandidate;
@@ -160,11 +181,13 @@ export async function generateAIGuesses(
   clueWord: string,
   clueNumber: number,
   team: Team,
-  model: string = 'gpt-4o-mini'
+  model: string = 'gpt-4o-mini',
+  reasoningEffort?: string,
+  customInstructions?: string
 ): Promise<AIGuessResponse> {
   const unrevealedWords = gameState.words.filter((w, i) => !gameState.revealed[i]);
 
-  const prompt = `You are playing Codenames as a guesser for the ${team.toUpperCase()} team.
+  let prompt = `You are playing Codenames as a guesser for the ${team.toUpperCase()} team.
 
 ## Game State
 - Your team's remaining words: ${team === 'red' ? gameState.redRemaining : gameState.blueRemaining} words left to find
@@ -186,6 +209,10 @@ Guidelines:
 4. Order your guesses from most confident to least confident
 5. Assign confidence scores (0-1) based on how strongly each word connects to the clue
 6. If you're unsure about later guesses, indicate you should stop early`;
+
+  if (customInstructions) {
+    prompt += `\n\n## Additional Instructions\n${customInstructions}`;
+  }
 
   const schema = {
     name: 'guesser_output',
@@ -226,15 +253,13 @@ Guidelines:
     },
   };
 
-  // Some models (o3, o4-mini) don't support temperature
-  const supportsTemperature = !model.startsWith('o3') && !model.startsWith('o4');
-
   const result = await callOpenAI(
     apiKey,
     [{ role: 'user', content: prompt }],
     schema,
     model,
-    supportsTemperature ? 0.3 : 1
+    0.3,
+    reasoningEffort
   );
 
   return result as AIGuessResponse;

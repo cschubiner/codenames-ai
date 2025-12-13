@@ -152,6 +152,14 @@ const AI_MODELS = [
   { id: 'o4-mini', name: 'o4-mini', description: 'Efficient reasoning' },
 ];
 
+// Models that support reasoning_effort parameter
+const REASONING_MODELS = ['gpt-5.1', 'gpt-5.2', 'gpt-5-mini', 'o3', 'o4-mini', 'o3-mini', 'o1', 'o1-mini'];
+
+// Check if a model supports reasoning effort
+function supportsReasoningEffort(modelId) {
+  return REASONING_MODELS.some(m => modelId.startsWith(m));
+}
+
 // Default models for each role type
 const DEFAULT_SPYMASTER_MODEL = 'gpt-4o';
 const DEFAULT_GUESSER_MODEL = 'gpt-4o-mini';
@@ -172,6 +180,12 @@ function Setup({ gameState, onConfigure, onStart, onBack, error, roomCode }) {
     blueGuesser: DEFAULT_GUESSER_MODEL,
   });
 
+  const [reasoningEffortConfig, setReasoningEffortConfig] = useState(gameState?.reasoningEffortConfig || {});
+
+  const [customInstructionsConfig, setCustomInstructionsConfig] = useState(gameState?.customInstructionsConfig || {});
+
+  const [expandedInstructions, setExpandedInstructions] = useState({});
+
   const [allowHumanAIHelp, setAllowHumanAIHelp] = useState(!!gameState?.allowHumanAIHelp);
 
   // Sync roleConfig from server updates (e.g., when players join)
@@ -182,26 +196,65 @@ function Setup({ gameState, onConfigure, onStart, onBack, error, roomCode }) {
     if (gameState?.modelConfig) {
       setModelConfig(gameState.modelConfig);
     }
+    if (gameState?.reasoningEffortConfig) {
+      setReasoningEffortConfig(gameState.reasoningEffortConfig);
+    }
+    if (gameState?.customInstructionsConfig) {
+      setCustomInstructionsConfig(gameState.customInstructionsConfig);
+    }
     if (typeof gameState?.allowHumanAIHelp === 'boolean') {
       setAllowHumanAIHelp(gameState.allowHumanAIHelp);
     }
-  }, [gameState?.roleConfig, gameState?.modelConfig, gameState?.allowHumanAIHelp]);
+  }, [gameState?.roleConfig, gameState?.modelConfig, gameState?.reasoningEffortConfig, gameState?.customInstructionsConfig, gameState?.allowHumanAIHelp]);
 
   const updateRole = (role, value) => {
     const newRoleConfig = { ...roleConfig, [role]: value };
     setRoleConfig(newRoleConfig);
-    onConfigure({ roleConfig: newRoleConfig, modelConfig, allowHumanAIHelp });
+    onConfigure({ roleConfig: newRoleConfig, modelConfig, reasoningEffortConfig, customInstructionsConfig, allowHumanAIHelp });
   };
 
   const updateModel = (role, model) => {
     const newModelConfig = { ...modelConfig, [role]: model };
     setModelConfig(newModelConfig);
-    onConfigure({ roleConfig, modelConfig: newModelConfig, allowHumanAIHelp });
+    // Clear reasoning effort if the new model doesn't support it
+    let newReasoningEffortConfig = reasoningEffortConfig;
+    if (!supportsReasoningEffort(model) && reasoningEffortConfig[role]) {
+      newReasoningEffortConfig = { ...reasoningEffortConfig };
+      delete newReasoningEffortConfig[role];
+      setReasoningEffortConfig(newReasoningEffortConfig);
+    }
+    onConfigure({ roleConfig, modelConfig: newModelConfig, reasoningEffortConfig: newReasoningEffortConfig, customInstructionsConfig, allowHumanAIHelp });
+  };
+
+  const updateReasoningEffort = (role, effort) => {
+    const newConfig = { ...reasoningEffortConfig };
+    if (effort) {
+      newConfig[role] = effort;
+    } else {
+      delete newConfig[role];
+    }
+    setReasoningEffortConfig(newConfig);
+    onConfigure({ roleConfig, modelConfig, reasoningEffortConfig: newConfig, customInstructionsConfig, allowHumanAIHelp });
+  };
+
+  const updateCustomInstructions = (role, instructions) => {
+    const newConfig = { ...customInstructionsConfig };
+    if (instructions && instructions.trim()) {
+      newConfig[role] = instructions;
+    } else {
+      delete newConfig[role];
+    }
+    setCustomInstructionsConfig(newConfig);
+    onConfigure({ roleConfig, modelConfig, reasoningEffortConfig, customInstructionsConfig: newConfig, allowHumanAIHelp });
+  };
+
+  const toggleInstructionsExpanded = (role) => {
+    setExpandedInstructions(prev => ({ ...prev, [role]: !prev[role] }));
   };
 
   const updateAllowHumanAIHelp = (value) => {
     setAllowHumanAIHelp(value);
-    onConfigure({ roleConfig, modelConfig, allowHumanAIHelp: value });
+    onConfigure({ roleConfig, modelConfig, reasoningEffortConfig, customInstructionsConfig, allowHumanAIHelp: value });
   };
 
   const kickSeat = async (team, role) => {
@@ -323,6 +376,42 @@ function Setup({ gameState, onConfigure, onStart, onBack, error, roomCode }) {
                     <option value=${m.id}>${m.name}</option>
                   `)}
                 </select>
+              </div>
+              ${supportsReasoningEffort(modelConfig[role.key]) && html`
+                <div style="margin-top: 0.5rem;">
+                  <label style="font-size: 0.8rem; color: var(--text-light);">Reasoning Effort:</label>
+                  <select
+                    value=${reasoningEffortConfig[role.key] || ''}
+                    onChange=${(e) => updateReasoningEffort(role.key, e.target.value || undefined)}
+                    style="font-size: 0.85rem; padding: 0.4rem;"
+                  >
+                    <option value="">Default</option>
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                  </select>
+                </div>
+              `}
+              <div style="margin-top: 0.75rem;">
+                <button
+                  type="button"
+                  onClick=${() => toggleInstructionsExpanded(role.key)}
+                  style="background: none; border: none; cursor: pointer; font-size: 0.85rem; color: var(--text-light); padding: 0; display: flex; align-items: center; gap: 0.25rem;"
+                >
+                  <span style="transition: transform 0.2s; transform: rotate(${expandedInstructions[role.key] ? '90deg' : '0deg'});">▶</span>
+                  Additional Instructions
+                  ${customInstructionsConfig[role.key] ? html`<span style="color: var(--${role.team}); font-weight: 600;"> *</span>` : ''}
+                </button>
+                ${expandedInstructions[role.key] && html`
+                  <div style="margin-top: 0.5rem;">
+                    <textarea
+                      value=${customInstructionsConfig[role.key] || ''}
+                      onInput=${(e) => updateCustomInstructions(role.key, e.target.value)}
+                      placeholder="e.g., 'Be conservative', 'Take more risks', 'Focus on 2-word clues'..."
+                      style="width: 100%; min-height: 60px; font-size: 0.85rem; padding: 0.5rem; border: 1px solid var(--border); border-radius: 4px; resize: vertical;"
+                    />
+                  </div>
+                `}
               </div>
             `}
           </div>
@@ -1002,21 +1091,30 @@ function Game({ roomCode, player, isSpymaster, onLeave }) {
 
       <div class="history">
         <h3>Clue History</h3>
-        ${gameState.clueHistory.map(clue => html`
-          <div class="history-item">
-            <div class="history-row">
-              <span class="team-badge ${clue.team}">${clue.team}</span>
-              <strong>${clue.word}</strong> ${clue.number}
-            </div>
-            ${clue.guesses?.length ? html`
-              <div class="history-guesses">
-                ${clue.guesses.map(g => html`
-                  <span class="guess-chip ${g.cardType}">${g.word}</span>
-                `)}
+        ${gameState.clueHistory.map(clue => {
+          // Get the AI reasoning from the first guess that has it (they share the same reasoning)
+          const aiReasoning = clue.guesses?.find(g => g.aiReasoning)?.aiReasoning;
+          return html`
+            <div class="history-item">
+              <div class="history-row">
+                <span class="team-badge ${clue.team}">${clue.team}</span>
+                <strong>${clue.word}</strong> ${clue.number}
               </div>
-            ` : null}
-          </div>
-        `)}
+              ${clue.guesses?.length ? html`
+                <div class="history-guesses">
+                  ${clue.guesses.map(g => html`
+                    <span class="guess-chip ${g.cardType}">${g.word}</span>
+                  `)}
+                </div>
+              ` : null}
+              ${aiReasoning ? html`
+                <div class="ai-reasoning" style="margin-top: 0.5rem; padding: 0.5rem; background: #f5f5f5; border-radius: 4px; font-size: 0.8rem; color: #666;">
+                  <strong>AI reasoning:</strong> ${aiReasoning}
+                </div>
+              ` : null}
+            </div>
+          `;
+        })}
       </div>
     </div>
   `;

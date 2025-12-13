@@ -12,6 +12,8 @@ import {
   Clue,
   RoleConfig,
   ModelConfig,
+  ReasoningEffortConfig,
+  CustomInstructionsConfig,
   GuessResult,
   AIClueCandidate,
 } from './types';
@@ -131,6 +133,8 @@ export class GameRoom {
         blueSpymaster: 'gpt-4o',
         blueGuesser: 'gpt-4o-mini',
       },
+      reasoningEffortConfig: {},
+      customInstructionsConfig: {},
       players: [],
       words,
       key,
@@ -171,10 +175,16 @@ export class GameRoom {
       return jsonResponse({ error: 'Can only configure during setup' }, 400);
     }
 
-    const body = await request.json() as { roleConfig: RoleConfig; modelConfig?: ModelConfig; allowHumanAIHelp?: boolean };
+    const body = await request.json() as { roleConfig: RoleConfig; modelConfig?: ModelConfig; reasoningEffortConfig?: ReasoningEffortConfig; customInstructionsConfig?: CustomInstructionsConfig; allowHumanAIHelp?: boolean };
     this.gameState!.roleConfig = body.roleConfig;
     if (body.modelConfig) {
       this.gameState!.modelConfig = body.modelConfig;
+    }
+    if (body.reasoningEffortConfig) {
+      this.gameState!.reasoningEffortConfig = body.reasoningEffortConfig;
+    }
+    if (body.customInstructionsConfig) {
+      this.gameState!.customInstructionsConfig = body.customInstructionsConfig;
     }
     if (typeof body.allowHumanAIHelp === 'boolean') {
       this.gameState!.allowHumanAIHelp = body.allowHumanAIHelp;
@@ -501,15 +511,19 @@ export class GameRoom {
 
     // Generate a new AI clue
     try {
-      // Get the configured model for this team's spymaster
+      // Get the configured model, reasoning effort, and custom instructions for this team's spymaster
       const modelKey = `${team}Spymaster` as keyof ModelConfig;
       const model = this.gameState!.modelConfig[modelKey];
+      const reasoningEffort = this.gameState!.reasoningEffortConfig[modelKey];
+      const customInstructions = this.gameState!.customInstructionsConfig[modelKey];
 
       const aiClue = await generateAIClue(
         this.env.OPENAI_API_KEY,
         this.gameState!,
         team,
-        model
+        model,
+        reasoningEffort,
+        customInstructions
       );
 
       this.pendingAIClue = aiClue;
@@ -545,9 +559,11 @@ export class GameRoom {
     }
 
     try {
-      // Get the configured model for this team's guesser
+      // Get the configured model, reasoning effort, and custom instructions for this team's guesser
       const modelKey = `${clue.team}Guesser` as keyof ModelConfig;
       const model = this.gameState!.modelConfig[modelKey];
+      const reasoningEffort = this.gameState!.reasoningEffortConfig[modelKey];
+      const customInstructions = this.gameState!.customInstructionsConfig[modelKey];
 
       const suggestions = await generateAIGuesses(
         this.env.OPENAI_API_KEY,
@@ -555,7 +571,9 @@ export class GameRoom {
         clue.word,
         clue.number,
         clue.team,
-        model
+        model,
+        reasoningEffort,
+        customInstructions
       );
 
       return jsonResponse({
@@ -595,9 +613,11 @@ export class GameRoom {
     }
 
     try {
-      // Get the configured model for this team's guesser
+      // Get the configured model, reasoning effort, and custom instructions for this team's guesser
       const modelKey = `${expectedClue.team}Guesser` as keyof ModelConfig;
       const model = this.gameState!.modelConfig[modelKey];
+      const reasoningEffort = this.gameState!.reasoningEffortConfig[modelKey];
+      const customInstructions = this.gameState!.customInstructionsConfig[modelKey];
 
       // Get AI suggestions
       const suggestions = await generateAIGuesses(
@@ -606,7 +626,9 @@ export class GameRoom {
         expectedClue.word,
         expectedClue.number,
         expectedClue.team,
-        model
+        model,
+        reasoningEffort,
+        customInstructions
       );
 
       // If the turn advanced while we were waiting on OpenAI, don't apply a stale guess.
@@ -668,7 +690,7 @@ export class GameRoom {
         lastClue.word === this.gameState!.currentClue.word &&
         lastClue.number === this.gameState!.currentClue.number
       ) {
-        (lastClue.guesses ??= []).push({ word: topGuess.word, cardType });
+        (lastClue.guesses ??= []).push({ word: topGuess.word, cardType, aiReasoning: suggestions.reasoning });
       }
 
       const correct = cardType === currentTeam;
@@ -779,6 +801,8 @@ export class GameRoom {
       allowHumanAIHelp: gs.allowHumanAIHelp,
       roleConfig: gs.roleConfig,
       modelConfig: gs.modelConfig,
+      reasoningEffortConfig: gs.reasoningEffortConfig,
+      customInstructionsConfig: gs.customInstructionsConfig,
       players: gs.players,
       words: gs.words,
       revealed: gs.revealed,
