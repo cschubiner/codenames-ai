@@ -792,7 +792,8 @@ function Game({ roomCode, player, isSpymaster, onLeave }) {
       ${currentClue && html`
         <div class="clue-display">
           <div class="clue-word">${currentClue.word}</div>
-          <div class="clue-number">${currentClue.number} (${guessesRemaining} guesses left)</div>
+          <div class="clue-number">${currentClue.number}</div>
+          <div class="guesses-remaining">${guessesRemaining} guesses left</div>
         </div>
       `}
 

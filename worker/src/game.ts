@@ -466,7 +466,7 @@ export class GameRoom {
     // Generate a new AI clue
     try {
       // Get the configured model for this team's spymaster
-      const modelKey = `${team}Spymaster` as keyof typeof this.gameState.modelConfig;
+      const modelKey = `${team}Spymaster` as keyof ModelConfig;
       const model = this.gameState!.modelConfig[modelKey];
 
       const aiClue = await generateAIClue(
@@ -506,7 +506,7 @@ export class GameRoom {
 
     try {
       // Get the configured model for this team's guesser
-      const modelKey = `${clue.team}Guesser` as keyof typeof this.gameState.modelConfig;
+      const modelKey = `${clue.team}Guesser` as keyof ModelConfig;
       const model = this.gameState!.modelConfig[modelKey];
 
       const suggestions = await generateAIGuesses(
@@ -552,7 +552,7 @@ export class GameRoom {
 
     try {
       // Get the configured model for this team's guesser
-      const modelKey = `${expectedClue.team}Guesser` as keyof typeof this.gameState.modelConfig;
+      const modelKey = `${expectedClue.team}Guesser` as keyof ModelConfig;
       const model = this.gameState!.modelConfig[modelKey];
 
       // Get AI suggestions
