@@ -35,6 +35,26 @@ function timeAgo(timestamp) {
   return `${hours}h ago`;
 }
 
+function startAdaptivePolling(callback, visibleMs, hiddenMs) {
+  let intervalId = null;
+
+  const start = () => {
+    if (intervalId) clearInterval(intervalId);
+    const delay = document.hidden ? hiddenMs : visibleMs;
+    intervalId = setInterval(callback, delay);
+  };
+
+  const onVisibilityChange = () => start();
+
+  start();
+  document.addEventListener('visibilitychange', onVisibilityChange);
+
+  return () => {
+    if (intervalId) clearInterval(intervalId);
+    document.removeEventListener('visibilitychange', onVisibilityChange);
+  };
+}
+
 // Home Screen
 function Home({ onHostGame, onJoinGame, onJoinRoom }) {
   const [games, setGames] = useState([]);
@@ -52,8 +72,7 @@ function Home({ onHostGame, onJoinGame, onJoinRoom }) {
 
   useEffect(() => {
     fetchGames();
-    const interval = setInterval(fetchGames, 5000);
-    return () => clearInterval(interval);
+    return startAdaptivePolling(fetchGames, 5000, 30000);
   }, [fetchGames]);
 
   return html`
@@ -372,16 +391,16 @@ function Join({ initialRoomCode, onJoin, onBack }) {
   useEffect(() => {
     if (!gameState || roomCode.length !== 4) return;
 
-    const interval = setInterval(async () => {
+    const poll = async () => {
       try {
         const data = await api(`/api/games/${roomCode}`);
         setGameState(data.gameState);
       } catch (err) {
         // Ignore polling errors
       }
-    }, 1500); // Poll every 1.5 seconds
+    };
 
-    return () => clearInterval(interval);
+    return startAdaptivePolling(poll, 1500, 10000);
   }, [gameState, roomCode]);
 
   const handleJoin = async (team, role) => {
@@ -611,8 +630,7 @@ function Game({ roomCode, player, isSpymaster, onLeave }) {
 
   useEffect(() => {
     fetchState();
-    const interval = setInterval(fetchState, 2000); // Poll every 2 seconds
-    return () => clearInterval(interval);
+    return startAdaptivePolling(fetchState, 2000, 15000);
   }, [fetchState]);
 
   // AI state - declared early so useEffect can reference it
@@ -1024,8 +1042,7 @@ function HostView({ roomCode, onLeave }) {
 
   useEffect(() => {
     fetchState();
-    const interval = setInterval(fetchState, 2000);
-    return () => clearInterval(interval);
+    return startAdaptivePolling(fetchState, 2000, 15000);
   }, [fetchState]);
 
   const kickSeat = async (team, role) => {
@@ -1236,8 +1253,8 @@ function App() {
       }
     };
 
-    const interval = setInterval(pollState, 2000);
-    return () => clearInterval(interval);
+    pollState();
+    return startAdaptivePolling(pollState, 2000, 15000);
   }, [screen, roomCode]);
 
   const handleHostGame = async () => {
