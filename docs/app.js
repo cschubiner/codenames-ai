@@ -56,7 +56,7 @@ const DEFAULT_SPYMASTER_MODEL = 'gpt-4o';
 const DEFAULT_GUESSER_MODEL = 'gpt-4o-mini';
 
 // Setup Screen (Host)
-function Setup({ gameState, onConfigure, onStart, onBack, error }) {
+function Setup({ gameState, onConfigure, onStart, onBack, error, roomCode }) {
   const [roleConfig, setRoleConfig] = useState(gameState?.roleConfig || {
     redSpymaster: 'human',
     redGuesser: 'human',
@@ -70,6 +70,16 @@ function Setup({ gameState, onConfigure, onStart, onBack, error }) {
     blueSpymaster: DEFAULT_SPYMASTER_MODEL,
     blueGuesser: DEFAULT_GUESSER_MODEL,
   });
+
+  // Sync roleConfig from server updates (e.g., when players join)
+  useEffect(() => {
+    if (gameState?.roleConfig) {
+      setRoleConfig(gameState.roleConfig);
+    }
+    if (gameState?.modelConfig) {
+      setModelConfig(gameState.modelConfig);
+    }
+  }, [gameState?.roleConfig, gameState?.modelConfig]);
 
   const updateRole = (role, value) => {
     const newRoleConfig = { ...roleConfig, [role]: value };
@@ -925,6 +935,23 @@ function App() {
   const [isSpymaster, setIsSpymaster] = useState(false);
   const [error, setError] = useState(null);
 
+  // Poll for game state updates during setup (to see player joins)
+  useEffect(() => {
+    if (screen !== 'setup' || !roomCode) return;
+
+    const pollState = async () => {
+      try {
+        const data = await api(`/api/games/${roomCode}`);
+        setGameState(data.gameState);
+      } catch (err) {
+        console.error('Poll error:', err);
+      }
+    };
+
+    const interval = setInterval(pollState, 2000);
+    return () => clearInterval(interval);
+  }, [screen, roomCode]);
+
   const handleHostGame = async () => {
     try {
       const data = await api('/api/games', { method: 'POST' });
@@ -936,11 +963,11 @@ function App() {
     }
   };
 
-  const handleConfigure = async (roleConfig) => {
+  const handleConfigure = async (config) => {
     try {
       const data = await api(`/api/games/${roomCode}/configure`, {
         method: 'POST',
-        body: JSON.stringify({ roleConfig }),
+        body: JSON.stringify(config),
       });
       setGameState(data.gameState);
     } catch (err) {
@@ -985,6 +1012,7 @@ function App() {
     ${screen === 'setup' && html`
       <${Setup}
         gameState=${gameState}
+        roomCode=${roomCode}
         onConfigure=${handleConfigure}
         onStart=${handleStartGame}
         onBack=${handleBack}
