@@ -495,19 +495,28 @@ function GameHistory() {
 
 // Available AI models
 const AI_MODELS = [
-  { id: 'gpt-5.1', name: 'GPT-5.1', description: 'Latest flagship' },
+  { id: 'gpt-5.2-pro', name: 'GPT-5.2 Pro', description: 'Most accurate (slow)', warning: 'May take 2-5+ min' },
   { id: 'gpt-5.2', name: 'GPT-5.2', description: 'Latest flagship v2' },
+  { id: 'gpt-5.1', name: 'GPT-5.1', description: 'Latest flagship' },
   { id: 'gpt-5-mini', name: 'GPT-5 Mini', description: 'Fast GPT-5' },
   { id: 'gpt-4.1', name: 'GPT-4.1', description: 'Fast & capable' },
   { id: 'gpt-4o', name: 'GPT-4o', description: 'Best quality' },
   { id: 'gpt-4o-mini', name: 'GPT-4o Mini', description: 'Fast & efficient' },
   { id: 'gpt-4.1-nano', name: 'GPT-4.1 Nano', description: 'Ultra fast' },
-  { id: 'o3', name: 'o3', description: 'Advanced reasoning' },
+  { id: 'o3', name: 'o3', description: 'Advanced reasoning', warning: 'May take 2-5+ min' },
   { id: 'o4-mini', name: 'o4-mini', description: 'Efficient reasoning' },
 ];
 
 // Models that support reasoning_effort parameter
-const REASONING_MODELS = ['gpt-5.1', 'gpt-5.2', 'gpt-5-mini', 'o3', 'o4-mini', 'o3-mini', 'o1', 'o1-mini'];
+const REASONING_MODELS = ['gpt-5.1', 'gpt-5.2', 'gpt-5.2-pro', 'gpt-5-mini', 'o3', 'o4-mini', 'o3-mini', 'o1', 'o1-mini'];
+
+// Models that require background mode (async polling)
+const BACKGROUND_MODE_MODELS = ['gpt-5.2-pro', 'o3', 'o1-pro'];
+
+// Check if a model requires background mode
+function requiresBackgroundMode(modelId) {
+  return BACKGROUND_MODE_MODELS.some(m => modelId.startsWith(m));
+}
 
 // Check if a model supports reasoning effort
 function supportsReasoningEffort(modelId) {
@@ -1725,19 +1734,50 @@ function HostView({ roomCode, onLeave }) {
     if (isAISpymaster && !gameState.currentClue) {
       setAiActionPending(true);
       setAiLoading(true);
-      console.log('Host: Auto-triggering AI clue for', currentTeam);
+      const modelKey = `${currentTeam}Spymaster`;
+      const model = gameState.modelConfig?.[modelKey] || 'gpt-4o';
+      const isBackgroundModel = requiresBackgroundMode(model);
+      console.log('Host: Auto-triggering AI clue for', currentTeam, 'using', model, 'background:', isBackgroundModel);
 
       (async () => {
         try {
-          await api(`/api/games/${roomCode}/ai-clue`, {
+          // Start the clue generation
+          const startResult = await api(`/api/games/${roomCode}/ai-clue`, {
             method: 'POST',
             body: JSON.stringify({}),
           });
-          await new Promise(resolve => setTimeout(resolve, 500));
-          await api(`/api/games/${roomCode}/ai-clue`, {
-            method: 'POST',
-            body: JSON.stringify({ confirm: true }),
-          });
+
+          // If using background mode, poll for completion
+          if (startResult.status === 'started' || startResult.status === 'pending') {
+            console.log('Background clue started, polling...');
+            let pollAttempts = 0;
+            const maxAttempts = 300; // 5 minutes at 1 second intervals
+            while (pollAttempts < maxAttempts) {
+              await new Promise(resolve => setTimeout(resolve, 1000));
+              const statusResult = await api(`/api/games/${roomCode}/ai-clue-status`);
+
+              if (statusResult.status === 'completed') {
+                console.log('Background clue completed:', statusResult.clue);
+                // Confirm the clue
+                await api(`/api/games/${roomCode}/ai-clue`, {
+                  method: 'POST',
+                  body: JSON.stringify({ confirm: true }),
+                });
+                break;
+              } else if (statusResult.status === 'failed' || statusResult.status === 'cancelled') {
+                console.error('Background clue failed:', statusResult.error || statusResult.message);
+                break;
+              }
+              pollAttempts++;
+            }
+          } else {
+            // Synchronous model - confirm immediately
+            await new Promise(resolve => setTimeout(resolve, 500));
+            await api(`/api/games/${roomCode}/ai-clue`, {
+              method: 'POST',
+              body: JSON.stringify({ confirm: true }),
+            });
+          }
           fetchState();
         } catch (err) {
           console.error('AI clue error:', err);

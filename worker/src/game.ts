@@ -20,7 +20,13 @@ import {
   AIClueCandidate,
   AIGuessResponse,
 } from './types';
-import { generateAIClue, generateAIGuesses } from './ai';
+import {
+  generateAIClue,
+  generateAIGuesses,
+  requiresBackgroundMode,
+  startBackgroundClue,
+  pollBackgroundRequest,
+} from './ai';
 
 // Word list (subset for the worker - full list loaded from shared/)
 import wordlist from '../../shared/wordlist.json';
@@ -46,6 +52,12 @@ export class GameRoom {
   private aiSuggestCacheSig: string | null = null;
   private aiSuggestCacheAt = 0;
   private aiPlayInFlight = false;
+
+  // Background mode state (for long-running models like gpt-5.2-pro)
+  private pendingBackgroundClueId: string | null = null;
+  private pendingBackgroundClueTeam: Team | null = null;
+  private pendingBackgroundGuessId: string | null = null;
+  private pendingBackgroundGuessTeam: Team | null = null;
 
   constructor(state: DurableObjectState, env: Env) {
     this.state = state;
@@ -133,6 +145,15 @@ export class GameRoom {
 
       if (method === 'POST' && path === '/set-turn-timer') {
         return this.handleSetTurnTimer(request);
+      }
+
+      // Background mode endpoints for long-running AI models
+      if (method === 'GET' && path === '/ai-clue-status') {
+        return this.handleAIClueStatus();
+      }
+
+      if (method === 'GET' && path === '/ai-guess-status') {
+        return this.handleAIGuessStatus();
       }
 
       return jsonResponse({ error: 'Not found' }, 404);
@@ -771,16 +792,53 @@ export class GameRoom {
       });
     }
 
-    // Generate a new AI clue
+    // Get the configured model, reasoning effort, and custom instructions for this team's spymaster
+    const modelKey = `${team}Spymaster` as keyof ModelConfig;
+    const model = this.gameState!.modelConfig[modelKey];
+    const reasoningEffort = this.gameState!.reasoningEffortConfig[modelKey];
+    const customInstructions = this.gameState!.customInstructionsConfig[modelKey];
+
+    // Check if model requires background mode (for long-running requests)
+    if (requiresBackgroundMode(model)) {
+      // Check if we already have a pending background request
+      if (this.pendingBackgroundClueId && this.pendingBackgroundClueTeam === team) {
+        return jsonResponse({
+          status: 'pending',
+          backgroundId: this.pendingBackgroundClueId,
+          message: 'AI clue generation in progress. Poll /ai-clue-status for updates.',
+          gameState: this.getPublicState(),
+        });
+      }
+
+      // Start a new background request
+      try {
+        const responseId = await startBackgroundClue(
+          apiKey,
+          this.gameState!,
+          team,
+          model,
+          reasoningEffort,
+          customInstructions
+        );
+
+        this.pendingBackgroundClueId = responseId;
+        this.pendingBackgroundClueTeam = team;
+
+        return jsonResponse({
+          status: 'started',
+          backgroundId: responseId,
+          message: 'AI clue generation started. Poll /ai-clue-status for updates.',
+          gameState: this.getPublicState(),
+        });
+      } catch (error) {
+        return jsonResponse({ error: String(error) }, 500);
+      }
+    }
+
+    // Generate a new AI clue (synchronous path for fast models)
     try {
       if (!this.aiClueTask) {
         this.aiClueTask = (async () => {
-          // Get the configured model, reasoning effort, and custom instructions for this team's spymaster
-          const modelKey = `${team}Spymaster` as keyof ModelConfig;
-          const model = this.gameState!.modelConfig[modelKey];
-          const reasoningEffort = this.gameState!.reasoningEffortConfig[modelKey];
-          const customInstructions = this.gameState!.customInstructionsConfig[modelKey];
-
           const aiClue = await generateAIClue(
             apiKey,
             this.gameState!,
@@ -814,6 +872,121 @@ export class GameRoom {
         gameState: this.getPublicState(),
       });
     } catch (error) {
+      return jsonResponse({ error: String(error) }, 500);
+    }
+  }
+
+  private async handleAIClueStatus(): Promise<Response> {
+    if (!this.env.OPENAI_API_KEY) {
+      return jsonResponse({ error: 'OpenAI API key not configured' }, 500);
+    }
+    const apiKey = this.env.OPENAI_API_KEY;
+
+    if (!this.pendingBackgroundClueId) {
+      return jsonResponse({ status: 'none', message: 'No pending background clue request' });
+    }
+
+    const team = this.pendingBackgroundClueTeam;
+
+    // Check if the turn has changed
+    if (team && team !== this.gameState!.currentTeam) {
+      this.pendingBackgroundClueId = null;
+      this.pendingBackgroundClueTeam = null;
+      return jsonResponse({ status: 'cancelled', message: 'Turn advanced, request cancelled' });
+    }
+
+    try {
+      const result = await pollBackgroundRequest(apiKey, this.pendingBackgroundClueId);
+
+      if (result.status === 'completed' && result.result) {
+        const aiClue = result.result as AIClueCandidate;
+        this.pendingAIClue = aiClue;
+        this.pendingAIClueTeam = team;
+        this.pendingAIClueLoaded = true;
+        await this.state.storage.put('pendingAIClue', { clue: aiClue, team });
+
+        // Clear background request state
+        this.pendingBackgroundClueId = null;
+        this.pendingBackgroundClueTeam = null;
+
+        return jsonResponse({
+          status: 'completed',
+          clue: aiClue,
+          message: 'AI generated a clue. Call /ai-clue with confirm=true to submit it.',
+          gameState: this.getPublicState(),
+        });
+      }
+
+      if (result.status === 'failed') {
+        this.pendingBackgroundClueId = null;
+        this.pendingBackgroundClueTeam = null;
+        return jsonResponse({ status: 'failed', error: result.error });
+      }
+
+      return jsonResponse({
+        status: result.status,
+        message: 'AI clue generation in progress...',
+        gameState: this.getPublicState(),
+      });
+    } catch (error) {
+      this.pendingBackgroundClueId = null;
+      this.pendingBackgroundClueTeam = null;
+      return jsonResponse({ error: String(error) }, 500);
+    }
+  }
+
+  private async handleAIGuessStatus(): Promise<Response> {
+    if (!this.env.OPENAI_API_KEY) {
+      return jsonResponse({ error: 'OpenAI API key not configured' }, 500);
+    }
+    const apiKey = this.env.OPENAI_API_KEY;
+
+    if (!this.pendingBackgroundGuessId) {
+      return jsonResponse({ status: 'none', message: 'No pending background guess request' });
+    }
+
+    const team = this.pendingBackgroundGuessTeam;
+
+    // Check if the turn has changed
+    if (team && team !== this.gameState!.currentTeam) {
+      this.pendingBackgroundGuessId = null;
+      this.pendingBackgroundGuessTeam = null;
+      return jsonResponse({ status: 'cancelled', message: 'Turn advanced, request cancelled' });
+    }
+
+    try {
+      const result = await pollBackgroundRequest(apiKey, this.pendingBackgroundGuessId);
+
+      if (result.status === 'completed' && result.result) {
+        const suggestions = result.result as AIGuessResponse;
+
+        // Clear background request state
+        this.pendingBackgroundGuessId = null;
+        this.pendingBackgroundGuessTeam = null;
+
+        return jsonResponse({
+          status: 'completed',
+          suggestions: suggestions.suggestions,
+          reasoning: suggestions.reasoning,
+          stopAfter: suggestions.stopAfter,
+          gameState: this.getPublicState(),
+        });
+      }
+
+      if (result.status === 'failed') {
+        this.pendingBackgroundGuessId = null;
+        this.pendingBackgroundGuessTeam = null;
+        return jsonResponse({ status: 'failed', error: result.error });
+      }
+
+      return jsonResponse({
+        status: result.status,
+        message: 'AI guess generation in progress...',
+        gameState: this.getPublicState(),
+      });
+    } catch (error) {
+      this.pendingBackgroundGuessId = null;
+      this.pendingBackgroundGuessTeam = null;
       return jsonResponse({ error: String(error) }, 500);
     }
   }

@@ -356,6 +356,36 @@ app.post('/api/games/:code/ai-play', async (c) => {
   return c.json(data, response.status as any);
 });
 
+// AI clue status (for background mode polling)
+app.get('/api/games/:code/ai-clue-status', async (c) => {
+  const roomCode = c.req.param('code').toUpperCase();
+
+  const id = c.env.GAME_ROOM.idFromName(roomCode);
+  const stub = c.env.GAME_ROOM.get(id);
+
+  const response = await stub.fetch(new Request('http://internal/ai-clue-status', {
+    method: 'GET',
+  }));
+
+  const data = await response.json();
+  return c.json(data, response.status as any);
+});
+
+// AI guess status (for background mode polling)
+app.get('/api/games/:code/ai-guess-status', async (c) => {
+  const roomCode = c.req.param('code').toUpperCase();
+
+  const id = c.env.GAME_ROOM.idFromName(roomCode);
+  const stub = c.env.GAME_ROOM.get(id);
+
+  const response = await stub.fetch(new Request('http://internal/ai-guess-status', {
+    method: 'GET',
+  }));
+
+  const data = await response.json();
+  return c.json(data, response.status as any);
+});
+
 // Toggle AI reasoning visibility
 app.post('/api/games/:code/toggle-ai-reasoning', async (c) => {
   const roomCode = c.req.param('code').toUpperCase();
