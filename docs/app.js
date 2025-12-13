@@ -1106,7 +1106,8 @@ function Game({ roomCode, player, isSpymaster, onLeave }) {
         <h3>Clue History</h3>
         ${gameState.clueHistory.map(clue => {
           // Get the AI reasoning from the first guess that has it (they share the same reasoning)
-          const aiReasoning = clue.guesses?.find(g => g.aiReasoning)?.aiReasoning;
+          // Only show if showAIReasoning is enabled (defaults to true)
+          const aiReasoning = gameState.showAIReasoning !== false ? clue.guesses?.find(g => g.aiReasoning)?.aiReasoning : null;
           return html`
             <div class="history-item">
               <div class="history-row">
@@ -1165,6 +1166,18 @@ function HostView({ roomCode, onLeave }) {
       fetchState();
     } catch (err) {
       console.error('Kick seat error:', err);
+    }
+  };
+
+  const toggleAIReasoning = async (showAIReasoning) => {
+    try {
+      await api(`/api/games/${roomCode}/toggle-ai-reasoning`, {
+        method: 'POST',
+        body: JSON.stringify({ showAIReasoning }),
+      });
+      fetchState();
+    } catch (err) {
+      console.error('Toggle AI reasoning error:', err);
     }
   };
 
@@ -1252,7 +1265,17 @@ function HostView({ roomCode, onLeave }) {
 
       ${showAdmin && html`
         <div style="max-width: 900px; margin: 1rem auto; padding: 1rem; background: rgba(255,255,255,0.92); border: 2px solid var(--border); border-radius: 12px;">
-          <h3 style="margin: 0 0 0.75rem 0;">Reset Seats</h3>
+          <h3 style="margin: 0 0 0.75rem 0;">Settings</h3>
+          <label style="display: flex; gap: 0.75rem; align-items: center; cursor: pointer; padding: 0.5rem 0;">
+            <input
+              type="checkbox"
+              checked=${gameState.showAIReasoning !== false}
+              onChange=${(e) => toggleAIReasoning(e.target.checked)}
+            />
+            <span>Show AI guesser reasoning in clue history</span>
+          </label>
+
+          <h3 style="margin: 1rem 0 0.75rem 0;">Reset Seats</h3>
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
             ${[
               { team: 'red', role: 'spymaster', label: 'Red Spymaster' },
@@ -1342,7 +1365,7 @@ function HostView({ roomCode, onLeave }) {
       <div class="history" style="max-width: 900px; margin: 2rem auto;">
         <h3>Clue History</h3>
         ${gameState.clueHistory.map(clue => {
-          const aiReasoning = clue.guesses?.find(g => g.aiReasoning)?.aiReasoning;
+          const aiReasoning = gameState.showAIReasoning !== false ? clue.guesses?.find(g => g.aiReasoning)?.aiReasoning : null;
           return html`
             <div class="history-item">
               <div class="history-row">

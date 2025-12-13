@@ -69,6 +69,7 @@ export interface GameState {
 
   // Settings
   allowHumanAIHelp: boolean;
+  showAIReasoning: boolean;
 
   // Role configuration
   roleConfig: RoleConfig;
@@ -153,6 +154,7 @@ export interface PublicGameState {
   roomCode: string;
   phase: GameState['phase'];
   allowHumanAIHelp: boolean;
+  showAIReasoning: boolean;
   roleConfig: RoleConfig;
   modelConfig: ModelConfig;
   reasoningEffortConfig: ReasoningEffortConfig;

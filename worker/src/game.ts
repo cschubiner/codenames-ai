@@ -105,6 +105,10 @@ export class GameRoom {
         return this.handleAIPlay();
       }
 
+      if (method === 'POST' && path === '/toggle-ai-reasoning') {
+        return this.handleToggleAIReasoning(request);
+      }
+
       return jsonResponse({ error: 'Not found' }, 404);
     } catch (error) {
       console.error('Error handling request:', error);
@@ -128,6 +132,7 @@ export class GameRoom {
     };
 
     if (typeof gs.allowHumanAIHelp !== 'boolean') gs.allowHumanAIHelp = false;
+    if (typeof gs.showAIReasoning !== 'boolean') gs.showAIReasoning = true;
     if (!gs.roleConfig) gs.roleConfig = { ...roleConfigDefaults };
     for (const key of Object.keys(roleConfigDefaults) as Array<keyof RoleConfig>) {
       if (gs.roleConfig[key] !== 'human' && gs.roleConfig[key] !== 'ai') {
@@ -164,6 +169,7 @@ export class GameRoom {
       roomCode,
       phase: 'setup',
       allowHumanAIHelp: false,
+      showAIReasoning: true,
       roleConfig: {
         redSpymaster: 'human',
         redGuesser: 'human',
@@ -493,6 +499,20 @@ export class GameRoom {
       this.gameState!.updatedAt = Date.now();
       await this.saveState();
     }
+
+    return jsonResponse({ gameState: this.getPublicState() });
+  }
+
+  private async handleToggleAIReasoning(request: Request): Promise<Response> {
+    const body = await request.json() as { showAIReasoning: boolean };
+
+    if (typeof body.showAIReasoning !== 'boolean') {
+      return jsonResponse({ error: 'showAIReasoning must be a boolean' }, 400);
+    }
+
+    this.gameState!.showAIReasoning = body.showAIReasoning;
+    this.gameState!.updatedAt = Date.now();
+    await this.saveState();
 
     return jsonResponse({ gameState: this.getPublicState() });
   }
@@ -909,6 +929,7 @@ export class GameRoom {
       roomCode: gs.roomCode,
       phase: gs.phase,
       allowHumanAIHelp: gs.allowHumanAIHelp,
+      showAIReasoning: gs.showAIReasoning,
       roleConfig: gs.roleConfig,
       modelConfig: gs.modelConfig,
       reasoningEffortConfig: gs.reasoningEffortConfig,
