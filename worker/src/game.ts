@@ -114,6 +114,7 @@ export class GameRoom {
     this.gameState = {
       roomCode,
       phase: 'setup',
+      allowHumanAIHelp: false,
       roleConfig: {
         redSpymaster: 'human',
         redGuesser: 'human',
@@ -166,10 +167,13 @@ export class GameRoom {
       return jsonResponse({ error: 'Can only configure during setup' }, 400);
     }
 
-    const body = await request.json() as { roleConfig: RoleConfig; modelConfig?: ModelConfig };
+    const body = await request.json() as { roleConfig: RoleConfig; modelConfig?: ModelConfig; allowHumanAIHelp?: boolean };
     this.gameState!.roleConfig = body.roleConfig;
     if (body.modelConfig) {
       this.gameState!.modelConfig = body.modelConfig;
+    }
+    if (typeof body.allowHumanAIHelp === 'boolean') {
+      this.gameState!.allowHumanAIHelp = body.allowHumanAIHelp;
     }
     this.gameState!.updatedAt = Date.now();
 
@@ -431,6 +435,10 @@ export class GameRoom {
 
     const body = await request.json().catch(() => ({})) as { confirm?: boolean };
     const team = this.gameState!.currentTeam;
+    const spymasterKey = `${team}Spymaster` as keyof RoleConfig;
+    if (this.gameState!.roleConfig[spymasterKey] === 'human' && !this.gameState!.allowHumanAIHelp) {
+      return jsonResponse({ error: 'AI help is disabled for human roles' }, 403);
+    }
 
     // If confirming a pending clue
     if (body.confirm && this.pendingAIClue) {
@@ -507,6 +515,10 @@ export class GameRoom {
     }
 
     const clue = this.gameState!.currentClue;
+    const guesserKey = `${clue.team}Guesser` as keyof RoleConfig;
+    if (this.gameState!.roleConfig[guesserKey] === 'human' && !this.gameState!.allowHumanAIHelp) {
+      return jsonResponse({ error: 'AI help is disabled for human roles' }, 403);
+    }
 
     try {
       // Get the configured model for this team's guesser
@@ -553,6 +565,10 @@ export class GameRoom {
     const expectedTeam = this.gameState!.currentTeam;
     const expectedClue = this.gameState!.currentClue;
     const expectedClueSig = `${expectedClue.team}|${expectedClue.word}|${expectedClue.number}`;
+    const guesserKey = `${expectedClue.team}Guesser` as keyof RoleConfig;
+    if (this.gameState!.roleConfig[guesserKey] === 'human' && !this.gameState!.allowHumanAIHelp) {
+      return jsonResponse({ error: 'AI help is disabled for human roles' }, 403);
+    }
 
     try {
       // Get the configured model for this team's guesser
@@ -736,6 +752,7 @@ export class GameRoom {
     const publicState: PublicGameState = {
       roomCode: gs.roomCode,
       phase: gs.phase,
+      allowHumanAIHelp: gs.allowHumanAIHelp,
       roleConfig: gs.roleConfig,
       modelConfig: gs.modelConfig,
       players: gs.players,

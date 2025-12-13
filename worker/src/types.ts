@@ -51,6 +51,9 @@ export interface GameState {
   roomCode: string;
   phase: 'setup' | 'playing' | 'finished';
 
+  // Settings
+  allowHumanAIHelp: boolean;
+
   // Role configuration
   roleConfig: RoleConfig;
   modelConfig: ModelConfig;
@@ -95,6 +98,7 @@ export interface CreateGameResponse {
 export interface ConfigureRolesRequest {
   roleConfig: RoleConfig;
   modelConfig?: ModelConfig;
+  allowHumanAIHelp?: boolean;
 }
 
 export interface JoinGameRequest {
@@ -128,6 +132,7 @@ export interface AIPlayRequest {
 export interface PublicGameState {
   roomCode: string;
   phase: GameState['phase'];
+  allowHumanAIHelp: boolean;
   roleConfig: RoleConfig;
   modelConfig: ModelConfig;
   players: Player[];

@@ -153,6 +153,8 @@ function Setup({ gameState, onConfigure, onStart, onBack, error, roomCode }) {
     blueGuesser: DEFAULT_GUESSER_MODEL,
   });
 
+  const [allowHumanAIHelp, setAllowHumanAIHelp] = useState(!!gameState?.allowHumanAIHelp);
+
   // Sync roleConfig from server updates (e.g., when players join)
   useEffect(() => {
     if (gameState?.roleConfig) {
@@ -161,18 +163,26 @@ function Setup({ gameState, onConfigure, onStart, onBack, error, roomCode }) {
     if (gameState?.modelConfig) {
       setModelConfig(gameState.modelConfig);
     }
-  }, [gameState?.roleConfig, gameState?.modelConfig]);
+    if (typeof gameState?.allowHumanAIHelp === 'boolean') {
+      setAllowHumanAIHelp(gameState.allowHumanAIHelp);
+    }
+  }, [gameState?.roleConfig, gameState?.modelConfig, gameState?.allowHumanAIHelp]);
 
   const updateRole = (role, value) => {
     const newRoleConfig = { ...roleConfig, [role]: value };
     setRoleConfig(newRoleConfig);
-    onConfigure({ roleConfig: newRoleConfig, modelConfig });
+    onConfigure({ roleConfig: newRoleConfig, modelConfig, allowHumanAIHelp });
   };
 
   const updateModel = (role, model) => {
     const newModelConfig = { ...modelConfig, [role]: model };
     setModelConfig(newModelConfig);
-    onConfigure({ roleConfig, modelConfig: newModelConfig });
+    onConfigure({ roleConfig, modelConfig: newModelConfig, allowHumanAIHelp });
+  };
+
+  const updateAllowHumanAIHelp = (value) => {
+    setAllowHumanAIHelp(value);
+    onConfigure({ roleConfig, modelConfig, allowHumanAIHelp: value });
   };
 
   const roles = [
@@ -210,17 +220,47 @@ function Setup({ gameState, onConfigure, onStart, onBack, error, roomCode }) {
         Choose whether each role is played by a human or AI
       </p>
 
+      <div style="margin-bottom: 1rem; padding: 1rem; background: #f5f5f5; border-radius: 8px;">
+        <label style="display: flex; gap: 0.75rem; align-items: flex-start; cursor: pointer;">
+          <input
+            type="checkbox"
+            checked=${allowHumanAIHelp}
+            onChange=${(e) => updateAllowHumanAIHelp(e.target.checked)}
+            style="margin-top: 0.2rem;"
+          />
+          <div>
+            <div style="font-weight: 600;">Allow AI help for humans</div>
+            <div style="font-size: 0.9rem; color: var(--text-light);">
+              When enabled, human players can use AI clue/suggestion tools during the game.
+            </div>
+          </div>
+        </label>
+      </div>
+
       <div class="role-config">
         ${roles.map(role => html`
           <div class="role-item ${role.team}">
             <h4>${role.label}</h4>
-            <select
-              value=${roleConfig[role.key]}
-              onChange=${(e) => updateRole(role.key, e.target.value)}
-            >
-              <option value="human">Human</option>
-              <option value="ai">AI</option>
-            </select>
+            <div class="radio-toggle">
+              <label class="radio-option">
+                <input
+                  type="radio"
+                  name=${`role-${role.key}`}
+                  checked=${roleConfig[role.key] === 'human'}
+                  onChange=${() => updateRole(role.key, 'human')}
+                />
+                Human
+              </label>
+              <label class="radio-option">
+                <input
+                  type="radio"
+                  name=${`role-${role.key}`}
+                  checked=${roleConfig[role.key] === 'ai'}
+                  onChange=${() => updateRole(role.key, 'ai')}
+                />
+                AI
+              </label>
+            </div>
             ${roleConfig[role.key] === 'ai' && html`
               <div style="margin-top: 0.5rem;">
                 <label style="font-size: 0.8rem; color: var(--text-light);">Model:</label>
@@ -746,6 +786,7 @@ function Game({ roomCode, player, isSpymaster, onLeave }) {
   }
 
   const { currentTeam, currentClue, guessesRemaining, redRemaining, blueRemaining, winner, phase } = gameState;
+  const canUseAIHints = !!gameState.allowHumanAIHelp;
 
   const isMyTurn = player?.team === currentTeam;
   const isMySpymasterTurn = isSpymaster && isMyTurn && !currentClue;
@@ -812,24 +853,26 @@ function Game({ roomCode, player, isSpymaster, onLeave }) {
         <div style="text-align: center; margin: 1rem 0;">
           <p>It's your turn! Give a clue to your team.</p>
           <${ClueInput} onSubmit=${handleClue} team=${currentTeam} />
-          <div style="margin-top: 1rem;">
-            <button
-              class="btn btn-neutral btn-small"
-              onClick=${handleGetAIClue}
-              disabled=${aiLoading}
-            >
-              ${aiLoading ? 'Thinking...' : 'Get AI Suggestion'}
-            </button>
-          </div>
-          ${aiClue && html`
-            <div style="margin-top: 1rem; padding: 1rem; background: #f5f5f5; border-radius: 8px;">
-              <p><strong>AI suggests:</strong> ${aiClue.clue} ${aiClue.number}</p>
-              <p style="font-size: 0.9rem; color: #666;">Targets: ${aiClue.intendedTargets?.join(', ')}</p>
-              <p style="font-size: 0.8rem; color: #888;">${aiClue.reasoning}</p>
-              <button class="btn btn-red btn-small" onClick=${handleConfirmAIClue}>
-                Use This Clue
+          ${canUseAIHints && html`
+            <div style="margin-top: 1rem;">
+              <button
+                class="btn btn-neutral btn-small"
+                onClick=${handleGetAIClue}
+                disabled=${aiLoading}
+              >
+                ${aiLoading ? 'Thinking...' : 'Get AI Suggestion'}
               </button>
             </div>
+            ${aiClue && html`
+              <div style="margin-top: 1rem; padding: 1rem; background: #f5f5f5; border-radius: 8px;">
+                <p><strong>AI suggests:</strong> ${aiClue.clue} ${aiClue.number}</p>
+                <p style="font-size: 0.9rem; color: #666;">Targets: ${aiClue.intendedTargets?.join(', ')}</p>
+                <p style="font-size: 0.8rem; color: #888;">${aiClue.reasoning}</p>
+                <button class="btn btn-red btn-small" onClick=${handleConfirmAIClue}>
+                  Use This Clue
+                </button>
+              </div>
+            `}
           `}
         </div>
       `}
@@ -837,20 +880,22 @@ function Game({ roomCode, player, isSpymaster, onLeave }) {
       ${!currentClue && isMyTurn && !isSpymaster && html`
         <div style="text-align: center; margin: 1rem 0; padding: 1rem; background: #fff3e0; border-radius: 8px;">
           <p>Waiting for ${currentTeam} spymaster to give a clue...</p>
-          <button
-            class="btn btn-neutral btn-small"
-            onClick=${handleGetAIClue}
-            disabled=${aiLoading}
-          >
-            ${aiLoading ? 'Generating...' : 'Generate AI Clue'}
-          </button>
-          ${aiClue && html`
-            <div style="margin-top: 1rem;">
-              <p><strong>AI suggests:</strong> ${aiClue.clue} ${aiClue.number}</p>
-              <button class="btn btn-red btn-small" onClick=${handleConfirmAIClue}>
-                Submit AI Clue
-              </button>
-            </div>
+          ${canUseAIHints && html`
+            <button
+              class="btn btn-neutral btn-small"
+              onClick=${handleGetAIClue}
+              disabled=${aiLoading}
+            >
+              ${aiLoading ? 'Generating...' : 'Generate AI Clue'}
+            </button>
+            ${aiClue && html`
+              <div style="margin-top: 1rem;">
+                <p><strong>AI suggests:</strong> ${aiClue.clue} ${aiClue.number}</p>
+                <button class="btn btn-red btn-small" onClick=${handleConfirmAIClue}>
+                  Submit AI Clue
+                </button>
+              </div>
+            `}
           `}
         </div>
       `}
@@ -867,22 +912,24 @@ function Game({ roomCode, player, isSpymaster, onLeave }) {
           <button class="btn btn-outline" onClick=${handleEndTurn}>
             End Turn
           </button>
-          <button
-            class="btn btn-neutral"
-            onClick=${handleGetAISuggestions}
-            disabled=${aiLoading}
-          >
-            ${aiLoading ? 'Thinking...' : 'AI Suggest'}
-          </button>
-          <button
-            class="btn btn-blue"
-            onClick=${handleAIPlay}
-            disabled=${aiLoading}
-          >
-            ${aiLoading ? 'Playing...' : 'AI Play'}
-          </button>
+          ${canUseAIHints && html`
+            <button
+              class="btn btn-neutral"
+              onClick=${handleGetAISuggestions}
+              disabled=${aiLoading}
+            >
+              ${aiLoading ? 'Thinking...' : 'AI Suggest'}
+            </button>
+            <button
+              class="btn btn-blue"
+              onClick=${handleAIPlay}
+              disabled=${aiLoading}
+            >
+              ${aiLoading ? 'Playing...' : 'AI Play'}
+            </button>
+          `}
         </div>
-        ${aiSuggestions && html`
+        ${canUseAIHints && aiSuggestions && html`
           <div style="max-width: 400px; margin: 1rem auto; padding: 1rem; background: #e3f2fd; border-radius: 8px;">
             <h4>AI Suggestions:</h4>
             ${aiSuggestions.suggestions?.slice(0, 5).map((s, i) => html`
