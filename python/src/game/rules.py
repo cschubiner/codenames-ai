@@ -243,6 +243,11 @@ class GameRules:
                 # Invalid guess - skip
                 continue
 
+        # If the turn wasn't already ended (by neutral/opponent/assassin/win),
+        # we need to end it now (either used all guesses or ran out of words to guess)
+        if not current_state.game_over and current_state.current_clue is not None:
+            current_state = GameRules.end_turn(current_state)
+
         return current_state, TurnResult(
             guesses=results,
             turn_ended_by=turn_ended_by,

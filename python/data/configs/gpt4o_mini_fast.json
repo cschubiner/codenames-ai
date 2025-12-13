@@ -1,0 +1,19 @@
+{
+  "name": "gpt4o_mini_fast",
+  "spymaster": {
+    "model": "gpt-4o-mini",
+    "prompt_id": "spymaster_v1",
+    "temperature": 0.7,
+    "candidates_per_turn": 3
+  },
+  "guesser": {
+    "model": "gpt-4o-mini",
+    "prompt_id": "guesser_v1",
+    "temperature": 0.2
+  },
+  "selection": {
+    "eval_samples_per_candidate": 1,
+    "eval_temperature": 0.3,
+    "aggregation": "mean"
+  }
+}

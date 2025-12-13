@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Optional
 
 from .state import GameState, Team, CardType
+from ..paths import WORDLIST_PATH
 
 
 class BoardGenerator:
@@ -37,24 +38,15 @@ class BoardGenerator:
     @staticmethod
     def _load_default_wordlist() -> list[str]:
         """Load the default word list from shared/wordlist.json."""
-        # Try multiple paths to find the wordlist
-        possible_paths = [
-            Path(__file__).parent.parent.parent.parent.parent / "shared" / "wordlist.json",
-            Path("shared/wordlist.json"),
-            Path("../shared/wordlist.json"),
-            Path("../../shared/wordlist.json"),
-        ]
+        if not WORDLIST_PATH.exists():
+            raise FileNotFoundError(
+                f"Could not find wordlist.json at {WORDLIST_PATH}. "
+                "Please ensure shared/wordlist.json exists."
+            )
 
-        for path in possible_paths:
-            if path.exists():
-                with open(path) as f:
-                    data = json.load(f)
-                    return data["words"]
-
-        raise FileNotFoundError(
-            "Could not find wordlist.json. "
-            "Please ensure shared/wordlist.json exists."
-        )
+        with open(WORDLIST_PATH) as f:
+            data = json.load(f)
+            return data["words"]
 
     def generate_board(
         self,

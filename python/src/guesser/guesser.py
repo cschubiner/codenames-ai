@@ -8,6 +8,7 @@ from typing import Optional
 from openai import AsyncOpenAI
 
 from ..game import GameState, Team, Clue
+from ..paths import PROMPTS_DIR
 from .schema_builder import build_guesser_schema
 
 
@@ -63,7 +64,7 @@ class Guesser:
         self.client = client or AsyncOpenAI()
 
         if prompts_dir is None:
-            prompts_dir = Path(__file__).parent.parent.parent.parent.parent / "shared" / "prompts"
+            prompts_dir = PROMPTS_DIR
         self.prompts_dir = prompts_dir
 
         self._prompt_template = self._load_prompt()

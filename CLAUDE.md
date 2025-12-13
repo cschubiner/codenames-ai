@@ -189,3 +189,9 @@ Frontend polls `/api/games/:code` every 2 seconds to sync state.
 
 ### Durable Object Persistence
 Game state persists in Cloudflare Durable Object storage via `this.state.storage`.
+
+## Repo Hygiene (Important)
+
+- Do **not** delete, restore, reset, or “clean up” unrelated files (including untracked/local-only files created by the user).
+- Avoid broad git commands like `git restore .`, `git reset --hard`, or `git clean -fd`.
+- Prefer targeted staging (`git add <files>` / `git add -p`) and leave other working tree changes untouched.

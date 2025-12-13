@@ -83,11 +83,14 @@ Visit: https://canal.github.io/codenames-ai/
 ```bash
 cd worker
 
+# Install dependencies (first time / after dependency changes)
+npm install
+
 # Set your OpenAI API key
 npx wrangler secret put OPENAI_API_KEY
 
 # Deploy
-npx wrangler deploy
+npm run deploy
 ```
 
 The worker is deployed at: `https://codenames-ai.cschubiner.workers.dev`
@@ -99,7 +102,15 @@ The worker is deployed at: `https://codenames-ai.cschubiner.workers.dev`
    - Branch: `main`
    - Folder: `/docs`
 
-2. Push to main branch
+2. Cache-bust the static assets by bumping the version query params in `docs/index.html` (the `?v=` values).
+
+3. Push to `main` (GitHub Pages serves `/docs` from the `main` branch).
+
+### Production API URL
+
+The frontend uses the Worker URL by default:
+
+- `docs/app.js` sets `API_BASE` from `window.CODENAMES_API_URL` (if provided) or falls back to `https://codenames-ai.cschubiner.workers.dev`.
 
 ## Project Structure
 

@@ -21,9 +21,13 @@ def build_guesser_schema(unrevealed_words: list[str]) -> dict[str, Any]:
         "strict": True,
         "schema": {
             "type": "object",
-            "required": ["guesses", "reasoning"],
+            "required": ["reasoning", "guesses", "stop_after"],
             "additionalProperties": False,
             "properties": {
+                "reasoning": {
+                    "type": "string",
+                    "description": "Brief explanation of the guessing strategy"
+                },
                 "guesses": {
                     "type": "array",
                     "description": "Ordered list of guesses from most to least confident",
@@ -43,10 +47,6 @@ def build_guesser_schema(unrevealed_words: list[str]) -> dict[str, Any]:
                             }
                         }
                     }
-                },
-                "reasoning": {
-                    "type": "string",
-                    "description": "Brief explanation of the guessing strategy"
                 },
                 "stop_after": {
                     "type": "integer",
@@ -72,9 +72,13 @@ def build_simple_guesser_schema() -> dict[str, Any]:
         "strict": True,
         "schema": {
             "type": "object",
-            "required": ["guesses", "reasoning"],
+            "required": ["reasoning", "guesses", "stop_after"],
             "additionalProperties": False,
             "properties": {
+                "reasoning": {
+                    "type": "string",
+                    "description": "Brief explanation of the guessing strategy"
+                },
                 "guesses": {
                     "type": "array",
                     "description": "Ordered list of guesses from most to least confident",
@@ -93,10 +97,6 @@ def build_simple_guesser_schema() -> dict[str, Any]:
                             }
                         }
                     }
-                },
-                "reasoning": {
-                    "type": "string",
-                    "description": "Brief explanation of the guessing strategy"
                 },
                 "stop_after": {
                     "type": "integer",
