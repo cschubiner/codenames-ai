@@ -429,9 +429,45 @@ body {
 .history-item {
   padding: 0.5rem;
   border-bottom: 1px solid var(--border);
+  display: block;
+}
+
+.history-row {
   display: flex;
   gap: 0.5rem;
   align-items: center;
+}
+
+.history-guesses {
+  margin-top: 0.35rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.guess-chip {
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: white;
+  background: var(--neutral);
+}
+
+.guess-chip.red {
+  background: var(--red);
+}
+
+.guess-chip.blue {
+  background: var(--blue);
+}
+
+.guess-chip.neutral {
+  background: var(--neutral);
+}
+
+.guess-chip.assassin {
+  background: #111;
 }
 
 .history-item .team-badge {

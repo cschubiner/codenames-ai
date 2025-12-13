@@ -873,8 +873,17 @@ function Game({ roomCode, player, isSpymaster, onLeave }) {
         <h3>Clue History</h3>
         ${gameState.clueHistory.map(clue => html`
           <div class="history-item">
-            <span class="team-badge ${clue.team}">${clue.team}</span>
-            <strong>${clue.word}</strong> ${clue.number}
+            <div class="history-row">
+              <span class="team-badge ${clue.team}">${clue.team}</span>
+              <strong>${clue.word}</strong> ${clue.number}
+            </div>
+            ${clue.guesses?.length ? html`
+              <div class="history-guesses">
+                ${clue.guesses.map(g => html`
+                  <span class="guess-chip ${g.cardType}">${g.word}</span>
+                `)}
+              </div>
+            ` : null}
           </div>
         `)}
       </div>
