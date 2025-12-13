@@ -120,6 +120,12 @@ export interface GameState {
     blue: { spymasterMs: number; guesserMs: number };
   };
 
+  // Pause state
+  isPaused: boolean;
+  pausedAt: number | null; // Timestamp when paused
+  pausedPhaseElapsed: number | null; // Elapsed ms in current phase when paused
+  pausedTurnElapsed: number | null; // Elapsed ms in current turn when paused
+
   // Timestamps
   createdAt: number;
   updatedAt: number;
@@ -203,6 +209,9 @@ export interface PublicGameState {
     red: { spymasterMs: number; guesserMs: number };
     blue: { spymasterMs: number; guesserMs: number };
   };
+  // Pause state
+  isPaused: boolean;
+  pausedAt: number | null;
 }
 
 // AI-related types

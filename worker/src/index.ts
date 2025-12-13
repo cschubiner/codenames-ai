@@ -458,6 +458,36 @@ app.post('/api/games/:code/set-turn-timer', async (c) => {
   return c.json(data, response.status as any);
 });
 
+// Pause game
+app.post('/api/games/:code/pause', async (c) => {
+  const roomCode = c.req.param('code').toUpperCase();
+
+  const id = c.env.GAME_ROOM.idFromName(roomCode);
+  const stub = c.env.GAME_ROOM.get(id);
+
+  const response = await stub.fetch(new Request('http://internal/pause', {
+    method: 'POST',
+  }));
+
+  const data = await response.json();
+  return c.json(data, response.status as any);
+});
+
+// Resume game
+app.post('/api/games/:code/resume', async (c) => {
+  const roomCode = c.req.param('code').toUpperCase();
+
+  const id = c.env.GAME_ROOM.idFromName(roomCode);
+  const stub = c.env.GAME_ROOM.get(id);
+
+  const response = await stub.fetch(new Request('http://internal/resume', {
+    method: 'POST',
+  }));
+
+  const data = await response.json();
+  return c.json(data, response.status as any);
+});
+
 // Get game history
 app.get('/api/history', async (c) => {
   try {

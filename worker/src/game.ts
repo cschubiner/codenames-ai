@@ -147,6 +147,14 @@ export class GameRoom {
         return this.handleSetTurnTimer(request);
       }
 
+      if (method === 'POST' && path === '/pause') {
+        return this.handlePause();
+      }
+
+      if (method === 'POST' && path === '/resume') {
+        return this.handleResume();
+      }
+
       // Background mode endpoints for long-running AI models
       if (method === 'GET' && path === '/ai-clue-status') {
         return this.handleAIClueStatus();
@@ -182,6 +190,10 @@ export class GameRoom {
     if (typeof gs.showAIReasoning !== 'boolean') gs.showAIReasoning = true;
     if (typeof gs.showSpymasterReasoning !== 'boolean') gs.showSpymasterReasoning = false;
     if (typeof gs.giveAIPastTurnInfo !== 'boolean') gs.giveAIPastTurnInfo = false;
+    if (typeof gs.isPaused !== 'boolean') gs.isPaused = false;
+    if (typeof gs.pausedAt !== 'number') gs.pausedAt = null;
+    if (typeof gs.pausedPhaseElapsed !== 'number') gs.pausedPhaseElapsed = null;
+    if (typeof gs.pausedTurnElapsed !== 'number') gs.pausedTurnElapsed = null;
     if (!gs.assassinBehavior || !['instant_loss', 'reveal_opponent', 'add_own_cards'].includes(gs.assassinBehavior)) {
       gs.assassinBehavior = 'instant_loss';
     }
@@ -273,6 +285,10 @@ export class GameRoom {
         red: { spymasterMs: 0, guesserMs: 0 },
         blue: { spymasterMs: 0, guesserMs: 0 },
       },
+      isPaused: false,
+      pausedAt: null,
+      pausedPhaseElapsed: null,
+      pausedTurnElapsed: null,
       createdAt: Date.now(),
       updatedAt: Date.now(),
     };
@@ -702,6 +718,67 @@ export class GameRoom {
 
     this.gameState!.turnTimer = body.turnTimer;
     this.gameState!.updatedAt = Date.now();
+    await this.saveState();
+
+    return jsonResponse({ gameState: this.getPublicState() });
+  }
+
+  private async handlePause(): Promise<Response> {
+    if (this.gameState!.phase !== 'playing') {
+      return jsonResponse({ error: 'Can only pause during gameplay' }, 400);
+    }
+
+    if (this.gameState!.isPaused) {
+      return jsonResponse({ error: 'Game is already paused' }, 400);
+    }
+
+    const now = Date.now();
+
+    // Calculate elapsed time in current phase and turn before pausing
+    const phaseElapsed = this.gameState!.phaseStartTime
+      ? now - this.gameState!.phaseStartTime
+      : 0;
+    const turnElapsed = this.gameState!.turnStartTime
+      ? now - this.gameState!.turnStartTime
+      : 0;
+
+    this.gameState!.isPaused = true;
+    this.gameState!.pausedAt = now;
+    this.gameState!.pausedPhaseElapsed = phaseElapsed;
+    this.gameState!.pausedTurnElapsed = turnElapsed;
+    this.gameState!.updatedAt = now;
+
+    await this.saveState();
+
+    return jsonResponse({ gameState: this.getPublicState() });
+  }
+
+  private async handleResume(): Promise<Response> {
+    if (this.gameState!.phase !== 'playing') {
+      return jsonResponse({ error: 'Can only resume during gameplay' }, 400);
+    }
+
+    if (!this.gameState!.isPaused) {
+      return jsonResponse({ error: 'Game is not paused' }, 400);
+    }
+
+    const now = Date.now();
+
+    // Restore start times so elapsed calculation continues correctly
+    // The new start time = now - (elapsed time when paused)
+    if (this.gameState!.pausedPhaseElapsed !== null) {
+      this.gameState!.phaseStartTime = now - this.gameState!.pausedPhaseElapsed;
+    }
+    if (this.gameState!.pausedTurnElapsed !== null) {
+      this.gameState!.turnStartTime = now - this.gameState!.pausedTurnElapsed;
+    }
+
+    this.gameState!.isPaused = false;
+    this.gameState!.pausedAt = null;
+    this.gameState!.pausedPhaseElapsed = null;
+    this.gameState!.pausedTurnElapsed = null;
+    this.gameState!.updatedAt = now;
+
     await this.saveState();
 
     return jsonResponse({ gameState: this.getPublicState() });
@@ -1491,6 +1568,8 @@ export class GameRoom {
       phaseStartTime: gs.phaseStartTime,
       turnStartTime: gs.turnStartTime,
       timing: gs.timing,
+      isPaused: gs.isPaused,
+      pausedAt: gs.pausedAt,
     };
 
     if (includeKey) {

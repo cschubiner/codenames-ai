@@ -162,12 +162,15 @@ function formatMs(ms) {
 }
 
 // Live timer component that updates every second
-function LiveTimer({ phaseStartTime, accumulatedMs }) {
+function LiveTimer({ phaseStartTime, accumulatedMs, isPaused }) {
   const [elapsed, setElapsed] = useState(0);
 
   useEffect(() => {
-    if (!phaseStartTime) {
-      setElapsed(0);
+    if (!phaseStartTime || isPaused) {
+      // When paused, don't reset - just stop updating
+      if (!isPaused) {
+        setElapsed(0);
+      }
       return;
     }
 
@@ -177,14 +180,14 @@ function LiveTimer({ phaseStartTime, accumulatedMs }) {
     update();
     const interval = setInterval(update, 1000);
     return () => clearInterval(interval);
-  }, [phaseStartTime]);
+  }, [phaseStartTime, isPaused]);
 
   const total = (accumulatedMs || 0) + elapsed;
   return html`<span>${formatMs(total)}</span>`;
 }
 
 // Turn timer countdown component with auto-end-turn
-function TurnTimerCountdown({ turnStartTime, turnTimer, onTimeUp, isActive }) {
+function TurnTimerCountdown({ turnStartTime, turnTimer, onTimeUp, isActive, isPaused }) {
   const [remaining, setRemaining] = useState(turnTimer ? turnTimer * 1000 : 0);
   const [hasTriggered, setHasTriggered] = useState(false);
 
@@ -194,8 +197,11 @@ function TurnTimerCountdown({ turnStartTime, turnTimer, onTimeUp, isActive }) {
   }, [turnStartTime]);
 
   useEffect(() => {
-    if (!turnTimer || !turnStartTime || !isActive) {
-      setRemaining(turnTimer ? turnTimer * 1000 : 0);
+    if (!turnTimer || !turnStartTime || !isActive || isPaused) {
+      // Don't reset remaining when paused - just stop updating
+      if (!isPaused) {
+        setRemaining(turnTimer ? turnTimer * 1000 : 0);
+      }
       return;
     }
 
@@ -214,7 +220,7 @@ function TurnTimerCountdown({ turnStartTime, turnTimer, onTimeUp, isActive }) {
     update();
     const interval = setInterval(update, 1000);
     return () => clearInterval(interval);
-  }, [turnStartTime, turnTimer, isActive, hasTriggered, onTimeUp]);
+  }, [turnStartTime, turnTimer, isActive, isPaused, hasTriggered, onTimeUp]);
 
   if (!turnTimer) return null;
 
@@ -224,36 +230,36 @@ function TurnTimerCountdown({ turnStartTime, turnTimer, onTimeUp, isActive }) {
   const isWarning = remaining <= 30000 && remaining > 10000; // 10-30 seconds
 
   return html`
-    <div class="turn-timer-countdown ${isLow ? 'low' : isWarning ? 'warning' : ''}">
+    <div class="turn-timer-countdown ${isLow ? 'low' : isWarning ? 'warning' : ''} ${isPaused ? 'paused' : ''}">
       <div class="timer-bar-container">
         <div class="timer-bar" style="width: ${percent}%"></div>
       </div>
-      <div class="timer-text">${formatMs(remaining)}</div>
+      <div class="timer-text">${isPaused ? 'PAUSED' : formatMs(remaining)}</div>
     </div>
   `;
 }
 
 // Timing display for host view showing all team times
 function TimingDisplay({ gameState }) {
-  const { timing, phaseStartTime, turnPhase, currentTeam, phase } = gameState;
+  const { timing, phaseStartTime, turnPhase, currentTeam, phase, isPaused } = gameState;
 
   if (!timing || phase === 'setup') return null;
 
-  // Determine which timer is currently active
-  const isRedSpymasterActive = phase === 'playing' && currentTeam === 'red' && turnPhase === 'clue';
-  const isRedGuesserActive = phase === 'playing' && currentTeam === 'red' && turnPhase === 'guess';
-  const isBlueSpymasterActive = phase === 'playing' && currentTeam === 'blue' && turnPhase === 'clue';
-  const isBlueGuesserActive = phase === 'playing' && currentTeam === 'blue' && turnPhase === 'guess';
+  // Determine which timer is currently active (but not when paused)
+  const isRedSpymasterActive = phase === 'playing' && currentTeam === 'red' && turnPhase === 'clue' && !isPaused;
+  const isRedGuesserActive = phase === 'playing' && currentTeam === 'red' && turnPhase === 'guess' && !isPaused;
+  const isBlueSpymasterActive = phase === 'playing' && currentTeam === 'blue' && turnPhase === 'clue' && !isPaused;
+  const isBlueGuesserActive = phase === 'playing' && currentTeam === 'blue' && turnPhase === 'guess' && !isPaused;
 
   return html`
-    <div class="timing-display">
+    <div class="timing-display ${isPaused ? 'paused' : ''}">
       <div class="timing-team red">
         <div class="timing-team-label">RED</div>
         <div class="timing-row ${isRedSpymasterActive ? 'active' : ''}">
           <span class="timing-label">Spymaster:</span>
           <span class="timing-value">
             ${isRedSpymasterActive
-              ? html`<${LiveTimer} phaseStartTime=${phaseStartTime} accumulatedMs=${timing.red.spymasterMs} />`
+              ? html`<${LiveTimer} phaseStartTime=${phaseStartTime} accumulatedMs=${timing.red.spymasterMs} isPaused=${isPaused} />`
               : formatMs(timing.red.spymasterMs)
             }
           </span>
@@ -262,7 +268,7 @@ function TimingDisplay({ gameState }) {
           <span class="timing-label">Guesser:</span>
           <span class="timing-value">
             ${isRedGuesserActive
-              ? html`<${LiveTimer} phaseStartTime=${phaseStartTime} accumulatedMs=${timing.red.guesserMs} />`
+              ? html`<${LiveTimer} phaseStartTime=${phaseStartTime} accumulatedMs=${timing.red.guesserMs} isPaused=${isPaused} />`
               : formatMs(timing.red.guesserMs)
             }
           </span>
@@ -271,7 +277,7 @@ function TimingDisplay({ gameState }) {
           <span class="timing-label">Total:</span>
           <span class="timing-value">
             ${(isRedSpymasterActive || isRedGuesserActive)
-              ? html`<${LiveTimer} phaseStartTime=${phaseStartTime} accumulatedMs=${timing.red.spymasterMs + timing.red.guesserMs} />`
+              ? html`<${LiveTimer} phaseStartTime=${phaseStartTime} accumulatedMs=${timing.red.spymasterMs + timing.red.guesserMs} isPaused=${isPaused} />`
               : formatMs(timing.red.spymasterMs + timing.red.guesserMs)
             }
           </span>
@@ -283,7 +289,7 @@ function TimingDisplay({ gameState }) {
           <span class="timing-label">Spymaster:</span>
           <span class="timing-value">
             ${isBlueSpymasterActive
-              ? html`<${LiveTimer} phaseStartTime=${phaseStartTime} accumulatedMs=${timing.blue.spymasterMs} />`
+              ? html`<${LiveTimer} phaseStartTime=${phaseStartTime} accumulatedMs=${timing.blue.spymasterMs} isPaused=${isPaused} />`
               : formatMs(timing.blue.spymasterMs)
             }
           </span>
@@ -292,7 +298,7 @@ function TimingDisplay({ gameState }) {
           <span class="timing-label">Guesser:</span>
           <span class="timing-value">
             ${isBlueGuesserActive
-              ? html`<${LiveTimer} phaseStartTime=${phaseStartTime} accumulatedMs=${timing.blue.guesserMs} />`
+              ? html`<${LiveTimer} phaseStartTime=${phaseStartTime} accumulatedMs=${timing.blue.guesserMs} isPaused=${isPaused} />`
               : formatMs(timing.blue.guesserMs)
             }
           </span>
@@ -301,7 +307,7 @@ function TimingDisplay({ gameState }) {
           <span class="timing-label">Total:</span>
           <span class="timing-value">
             ${(isBlueSpymasterActive || isBlueGuesserActive)
-              ? html`<${LiveTimer} phaseStartTime=${phaseStartTime} accumulatedMs=${timing.blue.spymasterMs + timing.blue.guesserMs} />`
+              ? html`<${LiveTimer} phaseStartTime=${phaseStartTime} accumulatedMs=${timing.blue.spymasterMs + timing.blue.guesserMs} isPaused=${isPaused} />`
               : formatMs(timing.blue.spymasterMs + timing.blue.guesserMs)
             }
           </span>
@@ -1746,9 +1752,32 @@ function HostView({ roomCode, onLeave }) {
     }
   };
 
+  const pauseGame = async () => {
+    try {
+      await api(`/api/games/${roomCode}/pause`, {
+        method: 'POST',
+      });
+      fetchState();
+    } catch (err) {
+      console.error('Pause game error:', err);
+    }
+  };
+
+  const resumeGame = async () => {
+    try {
+      await api(`/api/games/${roomCode}/resume`, {
+        method: 'POST',
+      });
+      fetchState();
+    } catch (err) {
+      console.error('Resume game error:', err);
+    }
+  };
+
   // Auto-trigger AI actions for host view
   useEffect(() => {
     if (!gameState || gameState.phase !== 'playing' || gameState.winner) return;
+    if (gameState.isPaused) return; // Don't auto-trigger AI actions when paused
     if (aiLoading || aiActionPending) return;
 
     const currentTeam = gameState.currentTeam;
@@ -1844,6 +1873,7 @@ function HostView({ roomCode, onLeave }) {
   // Handle turn timer expiration - auto-end turn
   const handleTurnTimeUp = useCallback(async () => {
     if (!gameState || gameState.phase !== 'playing' || gameState.winner) return;
+    if (gameState.isPaused) return; // Don't auto-end turn when paused
 
     console.log('Turn timer expired, auto-ending turn');
     try {
@@ -1876,6 +1906,23 @@ function HostView({ roomCode, onLeave }) {
 
       ${showAdmin && html`
         <div style="max-width: 900px; margin: 1rem auto; padding: 1rem; background: rgba(255,255,255,0.92); border: 2px solid var(--border); border-radius: 12px;">
+          ${gameState.phase === 'playing' && !gameState.winner && html`
+            <div style="margin-bottom: 1rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border);">
+              ${gameState.isPaused ? html`
+                <div style="display: flex; align-items: center; gap: 1rem;">
+                  <button class="btn btn-blue" onClick=${resumeGame} style="font-size: 1.1rem; padding: 0.75rem 1.5rem;">
+                    Resume Game
+                  </button>
+                  <span style="color: var(--text-light); font-style: italic;">Game is paused - all timers stopped</span>
+                </div>
+              ` : html`
+                <button class="btn btn-outline" onClick=${pauseGame} style="font-size: 1rem;">
+                  Pause Game
+                </button>
+              `}
+            </div>
+          `}
+
           <h3 style="margin: 0 0 0.75rem 0;">Settings</h3>
           <label style="display: flex; gap: 0.75rem; align-items: center; cursor: pointer; padding: 0.5rem 0;">
             <input
@@ -2009,6 +2056,7 @@ function HostView({ roomCode, onLeave }) {
           turnTimer=${gameState.turnTimer}
           onTimeUp=${handleTurnTimeUp}
           isActive=${gameState.phase === 'playing' && !winner}
+          isPaused=${gameState.isPaused}
         />
       `}
 
