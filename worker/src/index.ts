@@ -91,28 +91,83 @@ async function updateGameRegistry(kv: KVNamespace, roomCode: string, gameState: 
   await kv.put(`game:${roomCode}`, JSON.stringify(entry), {
     expirationTtl: 2 * 60 * 60, // 2 hour TTL
   });
+
+  // Maintain an explicit index to avoid KV.list() limits on Free tier.
+  // Structure: { [roomCode]: lastUpdatedAt }
+  const indexKey = 'game:index';
+  const now = Date.now();
+  const index = (await kv.get(indexKey, 'json').catch(() => null)) as Record<string, number> | null;
+  const nextIndex = (index && typeof index === 'object') ? { ...index } : {};
+  nextIndex[roomCode] = now;
+
+  // Prune to a reasonable max to avoid unbounded growth.
+  const entries = Object.entries(nextIndex);
+  if (entries.length > 500) {
+    entries.sort((a, b) => b[1] - a[1]);
+    const trimmed = entries.slice(0, 500);
+    const pruned: Record<string, number> = {};
+    for (const [code, ts] of trimmed) pruned[code] = ts;
+    await kv.put(indexKey, JSON.stringify(pruned), { expirationTtl: 24 * 60 * 60 });
+  } else {
+    await kv.put(indexKey, JSON.stringify(nextIndex), { expirationTtl: 24 * 60 * 60 });
+  }
 }
 
 // List active games
 app.get('/api/games', async (c) => {
   try {
-    // List all game keys in the registry (with prefix filter)
-    const list = await c.env.GAME_REGISTRY.list({ prefix: 'game:' });
-    const games: GameRegistryEntry[] = [];
+    const indexKey = 'game:index';
+    const index = await c.env.GAME_REGISTRY.get(indexKey, 'json') as Record<string, number> | null;
+    if (!index || typeof index !== 'object') {
+      return c.json({ games: [] });
+    }
 
-    // Fetch each game's metadata
-    for (const key of list.keys) {
-      const data = await c.env.GAME_REGISTRY.get(key.name, 'json') as GameRegistryEntry | null;
-      if (data) {
-        // Only include games that aren't finished and were updated recently (last 2 hours)
-        const twoHoursAgo = Date.now() - 2 * 60 * 60 * 1000;
-        if (data.phase !== 'finished' && data.updatedAt > twoHoursAgo) {
-          games.push(data);
-        } else {
-          // Clean up old/finished games
-          await c.env.GAME_REGISTRY.delete(key.name);
-        }
+    const now = Date.now();
+    const twoHoursAgo = now - 2 * 60 * 60 * 1000;
+    const codes = Object.entries(index)
+      .filter(([, ts]) => typeof ts === 'number' && ts > twoHoursAgo)
+      .sort((a, b) => b[1] - a[1])
+      .map(([code]) => code);
+
+    const results = await Promise.all(
+      codes.map((code) => c.env.GAME_REGISTRY.get(`game:${code}`, 'json') as Promise<GameRegistryEntry | null>),
+    );
+
+    const games: GameRegistryEntry[] = [];
+    let indexChanged = false;
+    const nextIndex: Record<string, number> = { ...index };
+
+    for (let i = 0; i < codes.length; i++) {
+      const code = codes[i];
+      const data = results[i];
+      if (!data) {
+        delete nextIndex[code];
+        indexChanged = true;
+        continue;
       }
+
+      // Only include games that aren't finished and were updated recently (last 2 hours)
+      if (data.phase !== 'finished' && data.updatedAt > twoHoursAgo) {
+        games.push(data);
+      } else {
+        await c.env.GAME_REGISTRY.delete(`game:${code}`);
+        delete nextIndex[code];
+        indexChanged = true;
+      }
+    }
+
+    // Drop stale index entries too (even if not fetched above).
+    for (const [code, ts] of Object.entries(nextIndex)) {
+      if (typeof ts !== 'number' || ts <= twoHoursAgo) {
+        delete nextIndex[code];
+        indexChanged = true;
+      }
+    }
+
+    if (indexChanged) {
+      await c.env.GAME_REGISTRY.put(indexKey, JSON.stringify(nextIndex), {
+        expirationTtl: 24 * 60 * 60,
+      });
     }
 
     // Sort by most recently updated
