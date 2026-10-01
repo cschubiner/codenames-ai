@@ -82,3 +82,13 @@ node benchmark/run.mjs --boards 1 --seed 20261020 --budget 30 \
 ```
 
 Provide unavailable-model notes with `--unavailable-file <json-path>` when starting a run. Resume requires the same roster, partner panel, board settings, budget, and code. The existing key's $45 lifetime cap covers both runs and all probes; the expanded runner ceiling is $30.
+
+### Additive publishing
+
+The default leaderboard is **All games**: every completed historical game stays in the dataset when models or runs are added. Original and expanded snapshots remain selectable. Percentages are shown alongside sample counts; equal game counts are not required. Completed games from partially finished blocks are included in this cumulative view, with failed/unfinished games excluded from scoring and preserved locally.
+
+```sh
+node benchmark/publish-history.mjs --run benchmark/runs.local/expanded-october-2026-v2
+```
+
+The publisher namespaces game and board identities by run, deduplicates repeated imports, preserves previously completed games even if a later import is partial, and refuses decreasing game counts. The first publish saves the original result file as `docs/benchmark-results-original.json`. Always use this additive publisher for the default `docs/benchmark-results.json`; direct runner exports should target a separate run snapshot.

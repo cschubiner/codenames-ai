@@ -3,7 +3,7 @@ import { h, render } from 'https://esm.sh/preact@10.19.3';
 import { useState, useEffect, useCallback, useRef } from 'https://esm.sh/preact@10.19.3/hooks';
 import htm from 'https://esm.sh/htm@3.1.1';
 
-import { Leaderboard } from './leaderboard.js?v=24';
+import { Leaderboard } from './leaderboard.js?v=25';
 
 const html = htm.bind(h);
 

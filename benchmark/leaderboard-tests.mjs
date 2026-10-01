@@ -22,11 +22,34 @@ test('partnerships keep roles distinct, include both leagues, and return only th
  assert.equal(cells.reduce((s,c)=>s+c.games,0),6);
 });
 test('published run has 40 games per combined matchup and per directional partnership',()=>{
- const data=JSON.parse(readFileSync(new URL('../docs/benchmark-results.json',import.meta.url)));
+ const data=JSON.parse(readFileSync(new URL('../docs/benchmark-results-original.json',import.meta.url)));
  const league=combinedLeague(data),pairs=partnerMatrix(data);
  assert.equal(league.games,240);
  for(const row of league.rankings){assert.equal(row.games,120);assert.equal(row.boards,5)}
  for(const cell of league.cells){assert.equal(cell.games,40);assert.equal(cell.boards,5)}
  for(const pair of pairs){assert.equal(pair.games,40);assert.equal(pair.boards,5)}
  assert.equal(pairs.reduce((s,p)=>s+p.games,0),480);
+});
+
+import {accumulate} from '../docs/leaderboard-history.js';
+test('cumulative history is additive, deduplicates imports, and separates board identities',()=>{
+ const first={manifest:{id:'old',boardCount:1},models,games:[{...game('1','spymaster','blue','blue'),status:'complete'}],completedGames:1,costUsd:1,reservedUsd:1,apiCalls:1};
+ const second={...first,manifest:{id:'new',boardCount:1},costUsd:2,games:[{...game('1','guesser','red','red'),status:'complete'}]};
+ const all=accumulate([first,second]);
+ assert.equal(all.completedGames,2);assert.equal(all.manifest.boardCount,2);assert.equal(all.costUsd,3);
+ assert.equal(accumulate([all,second]).completedGames,2);
+ assert.equal(accumulate([all,second]).costUsd,3);
+ const partial={...second,games:[],costUsd:2.5};
+ const retained=accumulate([all,partial]);
+ assert.equal(retained.completedGames,2);assert.equal(retained.costUsd,3.5);
+ assert.ok(retained.games.some(g=>g.runId==='old'));
+});
+test('all 240 original games remain in the cumulative publication',()=>{
+ const original=JSON.parse(readFileSync(new URL('../docs/benchmark-results-original.json',import.meta.url)));
+ const cumulative=JSON.parse(readFileSync(new URL('../docs/benchmark-results.json',import.meta.url)));
+ assert.equal(original.games.length,240);
+ const old=cumulative.games.filter(g=>g.runId===original.manifest.id);
+ assert.equal(old.length,240);
+ assert.deepEqual(new Set(old.map(g=>g.originalGameId)),new Set(original.games.map(g=>g.id)));
+ assert.equal(new Set(cumulative.games.map(g=>g.id)).size,cumulative.games.length);
 });
