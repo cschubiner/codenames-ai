@@ -36,6 +36,7 @@ import wordlist from '../../shared/wordlist.json';
 
 interface Env {
   OPENAI_API_KEY?: string;
+  OPENROUTER_API_KEY?: string;
   GAME_HISTORY?: D1Database;
 }
 
@@ -985,10 +986,10 @@ export class GameRoom {
   }
 
   private async handleAIClue(request: Request): Promise<Response> {
-    if (!this.env.OPENAI_API_KEY) {
-      return jsonResponse({ error: 'OpenAI API key not configured' }, 500);
+    if (!(this.env.OPENROUTER_API_KEY || this.env.OPENAI_API_KEY)) {
+      return jsonResponse({ error: 'AI API key not configured' }, 500);
     }
-    const apiKey = this.env.OPENAI_API_KEY;
+    const apiKey = (this.env.OPENROUTER_API_KEY || this.env.OPENAI_API_KEY)!;
 
     if (this.gameState!.phase !== 'playing') {
       return jsonResponse({ error: 'Game not in progress' }, 400);
@@ -1090,7 +1091,7 @@ export class GameRoom {
     const customInstructions = firstEntry.customInstructions;
 
     // Check if model requires background mode (for long-running requests)
-    if (requiresBackgroundMode(model)) {
+    if (requiresBackgroundMode(model, apiKey)) {
       // Check if we already have a pending background request
       if (this.pendingBackgroundClueId && this.pendingBackgroundClueTeam === team) {
         return jsonResponse({
@@ -1218,10 +1219,10 @@ export class GameRoom {
   }
 
   private async handleAIClueStatus(): Promise<Response> {
-    if (!this.env.OPENAI_API_KEY) {
-      return jsonResponse({ error: 'OpenAI API key not configured' }, 500);
+    if (!(this.env.OPENROUTER_API_KEY || this.env.OPENAI_API_KEY)) {
+      return jsonResponse({ error: 'AI API key not configured' }, 500);
     }
-    const apiKey = this.env.OPENAI_API_KEY;
+    const apiKey = (this.env.OPENROUTER_API_KEY || this.env.OPENAI_API_KEY)!;
 
     if (!this.pendingBackgroundClueId) {
       return jsonResponse({ status: 'none', message: 'No pending background clue request' });
@@ -1277,10 +1278,10 @@ export class GameRoom {
   }
 
   private async handleAIGuessStatus(): Promise<Response> {
-    if (!this.env.OPENAI_API_KEY) {
-      return jsonResponse({ error: 'OpenAI API key not configured' }, 500);
+    if (!(this.env.OPENROUTER_API_KEY || this.env.OPENAI_API_KEY)) {
+      return jsonResponse({ error: 'AI API key not configured' }, 500);
     }
-    const apiKey = this.env.OPENAI_API_KEY;
+    const apiKey = (this.env.OPENROUTER_API_KEY || this.env.OPENAI_API_KEY)!;
 
     if (!this.pendingBackgroundGuessId) {
       return jsonResponse({ status: 'none', message: 'No pending background guess request' });
@@ -1333,10 +1334,10 @@ export class GameRoom {
   }
 
   private async handleAISuggest(_request: Request): Promise<Response> {
-    if (!this.env.OPENAI_API_KEY) {
-      return jsonResponse({ error: 'OpenAI API key not configured' }, 500);
+    if (!(this.env.OPENROUTER_API_KEY || this.env.OPENAI_API_KEY)) {
+      return jsonResponse({ error: 'AI API key not configured' }, 500);
     }
-    const apiKey = this.env.OPENAI_API_KEY;
+    const apiKey = (this.env.OPENROUTER_API_KEY || this.env.OPENAI_API_KEY)!;
 
     if (this.gameState!.phase !== 'playing') {
       return jsonResponse({ error: 'Game not in progress' }, 400);
@@ -1420,10 +1421,10 @@ export class GameRoom {
   }
 
   private async handleAIPlay(): Promise<Response> {
-    if (!this.env.OPENAI_API_KEY) {
-      return jsonResponse({ error: 'OpenAI API key not configured' }, 500);
+    if (!(this.env.OPENROUTER_API_KEY || this.env.OPENAI_API_KEY)) {
+      return jsonResponse({ error: 'AI API key not configured' }, 500);
     }
-    const apiKey = this.env.OPENAI_API_KEY;
+    const apiKey = (this.env.OPENROUTER_API_KEY || this.env.OPENAI_API_KEY)!;
 
     if (this.gameState!.phase !== 'playing') {
       return jsonResponse({ error: 'Game not in progress' }, 400);

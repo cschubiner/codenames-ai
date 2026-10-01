@@ -30,4 +30,5 @@ tag = "v1"
 new_sqlite_classes = ["GameRoom"]
 
 # For local development, you can set secrets with:
-# wrangler secret put OPENAI_API_KEY
+# wrangler secret put OPENROUTER_API_KEY
+# OPENROUTER_API_KEY takes precedence over the optional legacy OPENAI_API_KEY.

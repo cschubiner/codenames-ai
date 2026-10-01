@@ -1,5 +1,5 @@
 /**
- * AI integration for Codenames - OpenAI API calls
+ * AI integration for Codenames - OpenRouter or direct OpenAI API calls
  *
  * Supports both synchronous Chat Completions API and async Responses API with background mode
  * for long-running reasoning models.
@@ -63,10 +63,12 @@ async function callChatCompletions(
   temperature: number = 0.7,
   reasoningEffort?: string
 ): Promise<any> {
-  const isReasoningModel = REASONING_MODELS.some(m => model.startsWith(m));
+  const useOpenRouter = apiKey.startsWith('sk-or-');
+  const modelName = model.replace(/^openai\//, '');
+  const isReasoningModel = REASONING_MODELS.some(m => modelName.startsWith(m));
 
   const body: any = {
-    model,
+    model: useOpenRouter && !model.includes('/') ? `openai/${model}` : model,
     messages,
     response_format: {
       type: 'json_schema',
@@ -81,10 +83,21 @@ async function callChatCompletions(
 
   // Add reasoning_effort for reasoning models
   if (isReasoningModel && reasoningEffort) {
-    body.reasoning_effort = reasoningEffort;
+    if (useOpenRouter) {
+      body.reasoning = { effort: reasoningEffort };
+    } else {
+      body.reasoning_effort = reasoningEffort;
+    }
   }
 
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+  if (useOpenRouter) {
+    body.provider = { require_parameters: true };
+  }
+
+  const endpoint = useOpenRouter
+    ? 'https://openrouter.ai/api/v1/chat/completions'
+    : 'https://api.openai.com/v1/chat/completions';
+  const response = await fetch(endpoint, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -94,8 +107,14 @@ async function callChatCompletions(
   });
 
   if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`OpenAI error ${response.status}: ${error}`);
+    console.error('AI completion failed:', response.status);
+    if (response.status === 402) {
+      throw new Error('AI is unavailable: the monthly application limit or account credits have been exhausted.');
+    }
+    if (response.status === 401 || response.status === 403) {
+      throw new Error('AI is unavailable: the application credentials need updating.');
+    }
+    throw new Error('The AI service is temporarily unavailable. Please try again later.');
   }
 
   const data = await response.json() as OpenAIResponse;
@@ -194,7 +213,9 @@ export async function pollBackgroundRequest(
 /**
  * Check if a model requires background mode
  */
-export function requiresBackgroundMode(model: string): boolean {
+export function requiresBackgroundMode(model: string, apiKey?: string): boolean {
+  // OpenRouter serves these models through Chat Completions, without OpenAI polling.
+  if (apiKey?.startsWith('sk-or-')) return false;
   return BACKGROUND_MODE_MODELS.some(m => model.startsWith(m));
 }
 
@@ -376,7 +397,7 @@ async function callOpenAI(
   reasoningEffort?: string
 ): Promise<any> {
   // Check if this model requires background mode
-  if (requiresBackgroundMode(model)) {
+  if (requiresBackgroundMode(model, apiKey)) {
     throw new Error(`Model ${model} requires background mode. Use the async API endpoints.`);
   }
 

@@ -21,7 +21,7 @@ cd codenames-ai
 # Start the backend
 cd worker
 npm install
-echo "OPENAI_API_KEY=sk-your-key-here" > .dev.vars
+echo "OPENROUTER_API_KEY=sk-or-your-key-here" > .dev.vars
 npm run dev
 
 # In another terminal, start the frontend
@@ -33,7 +33,7 @@ python3 -m http.server 3000
 
 ### Play Online
 
-Visit: https://canal.github.io/codenames-ai/
+Visit: https://cschubiner.github.io/codenames-ai/
 
 ## How to Play
 
@@ -67,14 +67,14 @@ Visit: https://canal.github.io/codenames-ai/
                                    │
                                    ▼
                         ┌──────────────────────┐
-                        │     OpenAI API       │
+                        │     OpenRouter API   │
                         │  (Structured Output) │
                         └──────────────────────┘
 ```
 
 - **Frontend**: Static Preact app on GitHub Pages
 - **Backend**: Cloudflare Workers with Durable Objects for game state
-- **AI**: OpenAI GPT-4o for spymaster clues, GPT-4o-mini for guesser
+- **AI**: OpenAI models through OpenRouter, with GPT-4o for spymaster clues, GPT-4o-mini for guesser
 
 ## Deployment
 
@@ -86,8 +86,8 @@ cd worker
 # Install dependencies (first time / after dependency changes)
 npm install
 
-# Set your OpenAI API key
-npx wrangler secret put OPENAI_API_KEY
+# Set the dedicated application key
+npx wrangler secret put OPENROUTER_API_KEY
 
 # Deploy
 npm run deploy
@@ -181,3 +181,9 @@ OPENAI_API_KEY=sk-your-key-here
 ## License
 
 MIT
+
+### Application AI budget
+
+Production uses a dedicated **Codenames AI** OpenRouter key with a **$5 monthly limit**, resetting on the first of each month at midnight UTC. Manage this cap in the personal OpenRouter account. The credential is stored only as the Worker secret `OPENROUTER_API_KEY`, never in frontend code or Git. It takes precedence over the optional legacy direct OpenAI key, so all new gameplay AI calls use the capped key.
+
+Existing model selections remain valid: the backend adds the `openai/` prefix for OpenRouter and uses its structured Chat Completions API, including reasoning models. Direct OpenAI deployments retain their original background polling support.

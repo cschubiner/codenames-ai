@@ -13,6 +13,7 @@ interface Env {
   GAME_REGISTRY: KVNamespace;
   GAME_HISTORY: D1Database;
   OPENAI_API_KEY?: string;
+  OPENROUTER_API_KEY?: string;
 }
 
 // Game registry entry stored in KV
