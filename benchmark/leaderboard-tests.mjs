@@ -53,3 +53,12 @@ test('all 240 original games remain in the cumulative publication',()=>{
  assert.deepEqual(new Set(old.map(g=>g.originalGameId)),new Set(original.games.map(g=>g.id)));
  assert.equal(new Set(cumulative.games.map(g=>g.id)).size,cumulative.games.length);
 });
+
+import {spawnSync} from 'node:child_process';
+test('runner exports cannot replace cumulative history',()=>{
+ const file=new URL('../docs/benchmark-results.json',import.meta.url),before=readFileSync(file,'utf8');
+ const result=spawnSync(process.execPath,['benchmark/run.mjs','--export'],{cwd:new URL('../',import.meta.url),encoding:'utf8',timeout:10000});
+ assert.notEqual(result.status,0);
+ assert.match(result.stderr,/Refusing to replace cumulative history/);
+ assert.equal(readFileSync(file,'utf8'),before);
+});

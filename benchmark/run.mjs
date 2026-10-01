@@ -1,9 +1,10 @@
-import { readFileSync, writeFileSync, mkdirSync, renameSync, openSync, closeSync, unlinkSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, renameSync, openSync, closeSync, unlinkSync, existsSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { loadEngine, MemoryStorage, action } from './engine.mjs';
 import { MODELS, AVAILABLE_MODELS, schedule, makeBoard, summarize, reserveCost, reserveCall } from './core.mjs';
+import { responseActionError, isInvalidModelAction, actionFailureMessage } from './model-actions.mjs';
 const args = process.argv.slice(2);
 const option = (key, fallback) => args.includes(key) ? args[args.indexOf(key)+1] : fallback;
 const root = resolve(new URL('../',import.meta.url).pathname);
@@ -24,10 +25,10 @@ const partnerPanel = args.includes('--partner-panel') ? option('--partner-panel'
 const partnerPairs = Number(option('--partner-pairs','0'));
 if(!Number.isInteger(partnerPairs)||partnerPairs<0) throw new Error('Partner pairs must be a nonnegative integer.');
 if(partnerPanel && partnerPanel.some(id=>!modelIds.includes(id))) throw new Error('Partner panel must be part of the model roster.');
-const fingerprint = createHash('sha256').update(engine.fingerprint+readFileSync(new URL('core.mjs',import.meta.url))+readFileSync(new URL('run.mjs',import.meta.url))).digest('hex');
+const fingerprint = createHash('sha256').update(engine.fingerprint+readFileSync(new URL('core.mjs',import.meta.url))+readFileSync(new URL('run.mjs',import.meta.url))+readFileSync(new URL('model-actions.mjs',import.meta.url))).digest('hex');
 let manifest = load('manifest.json', null);
 if(!manifest) {
-  manifest={ id:'codenames-'+Date.now(), createdAt:new Date().toISOString(), fingerprint, engineFingerprint:engine.fingerprint, seed, boardCount, simulations:0, reasoningEffort:'low', models, partnerPanel, partnerPairs, unavailableModels:args.includes('--unavailable-file')?JSON.parse(readFileSync(resolve(option('--unavailable-file','')),'utf8')):[{id:'openai/gpt-6.1-sol',reason:'Persistent upstream rate limits during cost checks; replaced by GPT-6 Sol in this run.'}], giveAIPastTurnInfo:true, assassinBehavior:'instant_loss', maxTokens:4096, maxTurns:40, budgetUsd:budget, methodology:'Two role leagues. Each pair has two distinct partner models excluding both contenders. Four-game blocks swap partners and starting sides on identical boards. Only complete blocks enter rankings; opponents have equal weight. 95% bootstrap intervals resample boards. Draws score 0.5. Illegal actions lose the turn; provider failures are excluded.', blocks:schedule(boardCount,seed,models,{partnerPanel,partnerPairs}).slice(0,maxBlocks), boards:Array.from({length:boardCount},(_,i)=>makeBoard(engine.wordlist,seed+i)) };
+  manifest={ id:'codenames-'+Date.now(), createdAt:new Date().toISOString(), fingerprint, engineFingerprint:engine.fingerprint, seed, boardCount, simulations:0, reasoningEffort:'low', models, partnerPanel, partnerPairs, unavailableModels:args.includes('--unavailable-file')?JSON.parse(readFileSync(resolve(option('--unavailable-file','')),'utf8')):[], giveAIPastTurnInfo:true, assassinBehavior:'instant_loss', maxTokens:4096, maxTurns:40, budgetUsd:budget, methodology:'Two role leagues. Each pair has two distinct partner models excluding both contenders. Four-game blocks swap partners and starting sides on identical boards. Only complete blocks enter rankings; opponents have equal weight. 95% bootstrap intervals resample boards. Draws score 0.5. Illegal actions lose the turn; provider failures are excluded.', blocks:schedule(boardCount,seed,models,{partnerPanel,partnerPairs}).slice(0,maxBlocks), boards:Array.from({length:boardCount},(_,i)=>makeBoard(engine.wordlist,seed+i)) };
   if(partnerPanel) manifest.methodology += ' Budget-limited partner panel: '+partnerPanel.join(', ')+'. '+partnerPairs+' seeded partner pair per contender matchup and board. This run has limited board and partner coverage; untested partnerships are blank.';
   save('manifest.json',manifest);
 } else if (!args.includes('--export') && (manifest.fingerprint!==fingerprint || manifest.boardCount!==boardCount || manifest.seed!==seed || manifest.budgetUsd!==budget || JSON.stringify(manifest.models)!==JSON.stringify(models) || JSON.stringify(manifest.partnerPanel??null)!==JSON.stringify(partnerPanel) || (manifest.partnerPairs??0)!==partnerPairs)) {
@@ -35,7 +36,9 @@ if(!manifest) {
 }
 const results=load('games.json',{}), ledger=load('ledger.json',{calls:[]});
 const publicPath=resolve(option('--publish',join(root,'docs/benchmark-results.json')));
-function publish() { const value=summarize(manifest,results,ledger); writeFileSync(publicPath+'.tmp',JSON.stringify(value)); renameSync(publicPath+'.tmp',publicPath); return value; }
+function protectHistory() { if(existsSync(publicPath) && JSON.parse(readFileSync(publicPath,'utf8')).manifest?.cumulative) throw new Error('Refusing to replace cumulative history. Use --publish for a separate run snapshot, then benchmark/publish-history.mjs.'); }
+if(!args.includes('--dry-run')) protectHistory();
+function publish() { protectHistory(); const value=summarize(manifest,results,ledger); writeFileSync(publicPath+'.tmp',JSON.stringify(value)); renameSync(publicPath+'.tmp',publicPath); return value; }
 if(args.includes('--export')) { console.log(JSON.stringify({exported:publicPath,completedGames:publish().completedGames})); process.exit(0); }
 if(args.includes('--dry-run')) { console.log(JSON.stringify({boards:manifest.boardCount,blocks:manifest.blocks.length,games:manifest.blocks.length*4,budgetUsd:budget,simulations:0,models},null,2)); process.exit(0); }
 const lockPath=join(directory,'run.lock');
@@ -92,10 +95,14 @@ globalThis.fetch=async (url,init)=>{
     call.providerError=data?.error ?? (!data?.choices?.length ? {message:'No completion choices',keys:Object.keys(data||{})} : null);
     if(data?.error?.code===429 && !data?.id && !data?.usage) call.charged=0;
     call.tokens=data?.usage?.total_tokens??null; call.provider=data?.provider??null;call.generationId=data?.id??null;
+    call.finishReason=data?.choices?.[0]?.finish_reason??null;
+    const actionError=responseActionError(data);
+    call.invalidAction=actionError?.message??null;
     call.status=response.ok?'complete':'error'; save('ledger.json',ledger);
     if(call.charged>reserve) { stopped=true;stopReason='unexpected price'; }
     if([401,402,403].includes(response.status)) { stopped=true;stopReason='provider authorization or credits'; }
     if(call.providerError || [429,500,502,503,504].includes(response.status)) throw new Error('Temporary provider failure');
+    if(actionError) throw actionError;
     return response;
   } catch(e) { call.status='error';call.latencyMs=Date.now()-start;save('ledger.json',ledger);throw e; }
 };
@@ -115,7 +122,7 @@ async function completion(game,role,fn) {
     // Space request starts; don't serialize the entire model generation.
     release();
     try { return await context.run({gameId:game.id,role},fn); }
-    catch(e) { if(stopped||attempt===3) throw e; await new Promise(r=>setTimeout(r,2000*(attempt+1))); }
+    catch(e) { if(stopped||isInvalidModelAction(e)||attempt===3) throw e; await new Promise(r=>setTimeout(r,2000*(attempt+1))); }
   }
 }
 
@@ -137,6 +144,8 @@ async function play(game) {
     while((await storage.get('gameState')).phase!=='finished' && turns.length<manifest.maxTurns) {
       const gs=await storage.get('gameState'), team=gs.currentTeam, seats=game.seats[team];
       const turn={team,clue:null,guesses:[],invalid:null};
+      let activeRole='spymaster';
+      try {
       const clue=await completion(game,'spymaster',()=>engine.generateAIClue(apiKey,gs,team,seats.spymaster,manifest.reasoningEffort));
       turn.clue=clue;
       const accepted=await action(room,'/clue',{word:clue.clue,number:clue.number});
@@ -144,6 +153,7 @@ async function play(game) {
         turn.invalid='spymaster: '+(accepted.error||'Clue must be one word');
         await action(room,'/end-turn');
       } else {
+        activeRole='guesser';
         const guess=await completion(game,'guesser',async()=>engine.generateAIGuesses(apiKey,await storage.get('gameState'),clue.clue,clue.number,team,seats.guesser,manifest.reasoningEffort));
         turn.guesserReasoning=guess.reasoning;
         if(!Number.isInteger(guess.stopAfter)||guess.stopAfter<0||!Array.isArray(guess.suggestions)) turn.invalid='guesser: malformed action';
@@ -154,6 +164,12 @@ async function play(game) {
           if(outcome.result.cardType==='assassin') assassinTeam=team;
           if(outcome.result.turnEnded) break;
         }
+        const after=await storage.get('gameState');
+        if(after.phase==='playing' && after.currentTeam===team) await action(room,'/end-turn');
+      }
+      } catch(e) {
+        if(!isInvalidModelAction(e)) throw e;
+        turn.invalid=activeRole+': '+actionFailureMessage(e);
         const after=await storage.get('gameState');
         if(after.phase==='playing' && after.currentTeam===team) await action(room,'/end-turn');
       }

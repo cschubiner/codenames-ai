@@ -13,19 +13,19 @@ Provide a dedicated OpenRouter key through `OPENROUTER_API_KEY`, or a mode-600 `
 node benchmark/run.mjs --boards 5 --budget 20 --dry-run
 
 # Run or resume that exact experiment. Default concurrency is 4.
-node benchmark/run.mjs --boards 5 --budget 20 --concurrency 4
+node benchmark/run.mjs --boards 5 --budget 20 --concurrency 4 --publish docs/benchmark-results-run.json
 
 # Resume provider-error games as well; completed games are never replayed.
-node benchmark/run.mjs --boards 5 --budget 20 --retry-errors
+node benchmark/run.mjs --boards 5 --budget 20 --retry-errors --publish docs/benchmark-results-run.json
 
 # Re-export checkpoints without API calls.
-node benchmark/run.mjs --export
+node benchmark/run.mjs --export --publish docs/benchmark-results-run.json
 
 # A separate larger experiment; the same key's lifetime cap still applies.
 node benchmark/run.mjs --boards 50 --budget 45 --out benchmark/runs.local/larger
 ```
 
-The public JSON updates after each recorded game. Commit `docs/benchmark-results.json` and push main to publish the snapshot. The site never executes the benchmark. For the local preview, serve `docs/` and open `/#leaderboard`.
+The selected run snapshot updates after each recorded game. Use the additive publisher described below, then commit the public result files and push main. The site never executes the benchmark. For the local preview, serve `docs/` and open `/#leaderboard`.
 
 The initial published run tests GPT-6 Luna, Gemini 3.8 Flash, Claude Sonnet 5.5 and GPT-6 Sol. GPT-6.1 Sol was unavailable due to persistent upstream rate limits during cost checks; those interrupted checks are not ranked.
 
@@ -74,14 +74,14 @@ The expanded roster adds Claude Opus 5.5, GPT-6 Astra, GPT-6.1 Sol, and Gemini 3
 The expanded run uses one fresh board (seed 20261020), one seeded partner pair per contender matchup, and the original four models as the eligible reference partner panel. Every contender meets every other contender in both roles, with teammates and sides swapped. This produces 224 games for eight models. The panel excludes both contenders; it limits cost while testing cross-model communication. Partner coverage is sparse, and untested partnerships stay blank. This single-board run is exploratory and should not be compared as if it had the original run's five-board coverage.
 
 ```sh
-node benchmark/run.mjs --boards 1 --seed 20261020 --budget 30 \
+node benchmark/run.mjs --boards 1 --seed 20261020 --budget 33 \
   --models openai/gpt-6-luna,google/gemini-3.8-flash,anthropic/claude-sonnet-5.5,openai/gpt-6-sol,anthropic/claude-opus-5.5,openai/gpt-6-astra,openai/gpt-6.1-sol,google/gemini-3.1-pro-preview \
   --partner-panel openai/gpt-6-luna,google/gemini-3.8-flash,anthropic/claude-sonnet-5.5,openai/gpt-6-sol \
   --partner-pairs 1 --out benchmark/runs.local/expanded-october-2026-v2 \
   --publish docs/benchmark-results-expanded.json --concurrency 8
 ```
 
-Provide unavailable-model notes with `--unavailable-file <json-path>` when starting a run. Resume requires the same roster, partner panel, board settings, budget, and code. The existing key's $45 lifetime cap covers both runs and all probes; the expanded runner ceiling is $30.
+Provide unavailable-model notes with `--unavailable-file <json-path>` when starting a run. Resume requires the same roster, partner panel, board settings, budget, and code. The existing key's $45 lifetime cap covers both runs and all probes; the expanded runner ceiling is $33 for recovery (initially $30).
 
 ### Additive publishing
 
@@ -92,3 +92,5 @@ node benchmark/publish-history.mjs --run benchmark/runs.local/expanded-october-2
 ```
 
 The publisher namespaces game and board identities by run, deduplicates repeated imports, preserves previously completed games even if a later import is partial, and refuses decreasing game counts. The first publish saves the original result file as `docs/benchmark-results-original.json`. Always use this additive publisher for the default `docs/benchmark-results.json`; direct runner exports should target a separate run snapshot.
+
+Model refusals and malformed JSON are invalid actions and end the current turn. Genuine provider errors remain excluded. The runner refuses to overwrite the cumulative public file, including during exports, before making paid calls.

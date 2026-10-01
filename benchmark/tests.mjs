@@ -87,3 +87,15 @@ test('expanded panel gives every contender all opponents, balanced partners and 
  }
  assert.throws(()=>schedule(1,1,extra,{partnerPanel:[extra[0].id,extra[1].id],partnerPairs:1}),/two eligible/);
 });
+
+import {responseActionError,isInvalidModelAction,actionFailureMessage} from './model-actions.mjs';
+test('refusals and malformed model answers are invalid actions, outages are not',()=>{
+ const refusal=responseActionError({choices:[{finish_reason:'content_filter',message:{content:'partial'}}]});
+ assert.ok(isInvalidModelAction(refusal));
+ assert.equal(actionFailureMessage(refusal),'Model refused the action.');
+ assert.ok(isInvalidModelAction(new SyntaxError('broken JSON')));
+ assert.equal(actionFailureMessage(new SyntaxError()),'Model returned malformed JSON.');
+ assert.equal(responseActionError({error:{code:429}}),null);
+ assert.equal(isInvalidModelAction(new Error('Temporary provider failure')),false);
+ assert.equal(responseActionError({choices:[{finish_reason:'stop',message:{content:'{}'}}]}),null);
+});
