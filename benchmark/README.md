@@ -10,13 +10,13 @@ Provide a dedicated OpenRouter key through `OPENROUTER_API_KEY`, or a mode-600 `
 
 ```sh
 # Inspect the schedule without any API calls (5 boards = 240 games).
-node benchmark/run.mjs --boards 5 --budget 10 --dry-run
+node benchmark/run.mjs --boards 5 --budget 20 --dry-run
 
 # Run or resume that exact experiment. Default concurrency is 4.
-node benchmark/run.mjs --boards 5 --budget 10 --concurrency 4
+node benchmark/run.mjs --boards 5 --budget 20 --concurrency 4
 
 # Resume provider-error games as well; completed games are never replayed.
-node benchmark/run.mjs --boards 5 --budget 10 --retry-errors
+node benchmark/run.mjs --boards 5 --budget 20 --retry-errors
 
 # Re-export checkpoints without API calls.
 node benchmark/run.mjs --export

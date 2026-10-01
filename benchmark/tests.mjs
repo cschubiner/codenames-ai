@@ -65,5 +65,5 @@ test('shared guesser prompt contains no secret key or intended targets',async(t)
   assert.deepEqual(body.reasoning,{effort:'low'});assert.ok(!('temperature' in body));
   return Response.json({choices:[{message:{content:JSON.stringify({reasoning:'fruit',suggestions:[{word:'APPLE',confidence:.9}],stopAfter:1})}}]});
  });
- await engine.generateAIGuesses('sk-or-test',{words:['APPLE','BOMB'],key:['red','assassin'],revealed:[false,false],redRemaining:1,blueRemaining:1,giveAIPastTurnInfo:false,currentClue:{intendedTargets:['PRIVATE_SECRET_TARGET']}},'Fruit',1,'red','google/gemini-3.8-flash','low');
+ await engine.generateAIGuesses('sk-or-test',{words:['APPLE','BOMB'],key:['red','assassin'],revealed:[false,false],redRemaining:1,blueRemaining:1,giveAIPastTurnInfo:true,clueHistory:[{word:'Earlier',number:1,team:'red',intendedTargets:['PRIVATE_SECRET_TARGET'],guesses:[]}],currentClue:{intendedTargets:['PRIVATE_SECRET_TARGET']}},'Fruit',1,'red','google/gemini-3.8-flash','low');
 });
