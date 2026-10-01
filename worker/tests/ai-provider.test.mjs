@@ -61,3 +61,21 @@ for (const [status, message] of [[401, 'credentials need updating'], [402, 'mont
     });
   });
 }
+
+test('HTTP 200 with an upstream error is shown as a temporary service failure', async (t) => {
+  t.mock.method(globalThis, 'fetch', async () => Response.json({ error: { code: 429, message: 'private upstream diagnostic' } }));
+  await assert.rejects(generateAIClue('sk-or-test', board, 'red'), /temporarily unavailable/);
+});
+
+for (const model of ['openai/gpt-6-luna', 'google/gemini-3.8-flash', 'anthropic/claude-sonnet-5.5', 'openai/gpt-6-sol']) {
+  test(`OpenRouter forwards low reasoning for ${model} without temperature`, async (t) => {
+    t.mock.method(globalThis, 'fetch', async (_, init) => {
+      const body = JSON.parse(init.body);
+      assert.equal(body.model, model);
+      assert.deepEqual(body.reasoning, { effort: 'low' });
+      assert.ok(!('temperature' in body));
+      return Response.json({ choices: [{ message: { content: JSON.stringify(clue) } }] });
+    });
+    await generateAIClue('sk-or-test', board, 'red', model, 'low');
+  });
+}

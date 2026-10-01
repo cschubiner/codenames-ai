@@ -47,7 +47,7 @@ interface ResponsesAPIResponse {
 }
 
 // Models that support reasoning_effort parameter
-const REASONING_MODELS = ['gpt-5.1', 'gpt-5.2', 'gpt-5-mini', 'o3', 'o4-mini', 'o3-mini', 'o1', 'o1-mini'];
+const REASONING_MODELS = ['gpt-6', 'gpt-5.1', 'gpt-5.2', 'gpt-5-mini', 'o3', 'o4-mini', 'o3-mini', 'o1', 'o1-mini'];
 
 // Models that require background mode (very long reasoning times)
 const BACKGROUND_MODE_MODELS = ['gpt-5.2-pro', 'o3', 'o1-pro'];
@@ -77,12 +77,12 @@ async function callChatCompletions(
   };
 
   // Only add temperature for non-reasoning models
-  if (!isReasoningModel) {
+  if (!isReasoningModel && !(useOpenRouter && reasoningEffort)) {
     body.temperature = temperature;
   }
 
   // Add reasoning_effort for reasoning models
-  if (isReasoningModel && reasoningEffort) {
+  if ((isReasoningModel || useOpenRouter) && reasoningEffort) {
     if (useOpenRouter) {
       body.reasoning = { effort: reasoningEffort };
     } else {
@@ -118,6 +118,9 @@ async function callChatCompletions(
   }
 
   const data = await response.json() as OpenAIResponse;
+  if (!data.choices?.[0]?.message?.content) {
+    throw new Error('The AI service is temporarily unavailable. Please try again later.');
+  }
   return JSON.parse(data.choices[0].message.content);
 }
 

@@ -196,10 +196,10 @@ export class GameRoom {
     };
 
     const modelConfigDefaults: ModelConfig = {
-      redSpymaster: 'gpt-4o',
-      redGuesser: 'gpt-4o-mini',
-      blueSpymaster: 'gpt-4o',
-      blueGuesser: 'gpt-4o-mini',
+      redSpymaster: 'google/gemini-3.8-flash',
+      redGuesser: 'openai/gpt-6-luna',
+      blueSpymaster: 'google/gemini-3.8-flash',
+      blueGuesser: 'openai/gpt-6-luna',
     };
 
     if (typeof gs.allowHumanAIHelp !== 'boolean') gs.allowHumanAIHelp = false;
@@ -221,7 +221,7 @@ export class GameRoom {
       gs.simulationCount = 0;
     }
     if (typeof gs.simulationModel !== 'string' || !gs.simulationModel) {
-      gs.simulationModel = 'gpt-4o';
+      gs.simulationModel = 'google/gemini-3.8-flash';
     }
     if (typeof gs.showSimulationDetails !== 'boolean') gs.showSimulationDetails = false;
     if (!gs.lastSimulationResults) gs.lastSimulationResults = null;
@@ -303,7 +303,7 @@ export class GameRoom {
       assassinBehavior: 'instant_loss',
       turnTimer: null,
       simulationCount: 0,
-      simulationModel: 'gpt-4o',
+      simulationModel: 'google/gemini-3.8-flash',
       showSimulationDetails: false,
       lastSimulationResults: null,
       roleConfig: {
@@ -313,18 +313,18 @@ export class GameRoom {
         blueGuesser: 'human',
       },
       modelConfig: {
-        redSpymaster: 'gpt-4o',
-        redGuesser: 'gpt-4o-mini',
-        blueSpymaster: 'gpt-4o',
-        blueGuesser: 'gpt-4o-mini',
+        redSpymaster: 'google/gemini-3.8-flash',
+        redGuesser: 'openai/gpt-6-luna',
+        blueSpymaster: 'google/gemini-3.8-flash',
+        blueGuesser: 'openai/gpt-6-luna',
       },
       reasoningEffortConfig: {},
       customInstructionsConfig: {},
       multiModelConfig: {
-        redSpymaster: [{ model: 'gpt-4o' }],
-        redGuesser: [{ model: 'gpt-4o-mini' }],
-        blueSpymaster: [{ model: 'gpt-4o' }],
-        blueGuesser: [{ model: 'gpt-4o-mini' }],
+        redSpymaster: [{ model: 'google/gemini-3.8-flash' }],
+        redGuesser: [{ model: 'openai/gpt-6-luna' }],
+        blueSpymaster: [{ model: 'google/gemini-3.8-flash' }],
+        blueGuesser: [{ model: 'openai/gpt-6-luna' }],
       },
       players: [],
       words,

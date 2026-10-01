@@ -3,6 +3,8 @@ import { h, render } from 'https://esm.sh/preact@10.19.3';
 import { useState, useEffect, useCallback, useRef } from 'https://esm.sh/preact@10.19.3/hooks';
 import htm from 'https://esm.sh/htm@3.1.1';
 
+import { Leaderboard } from './leaderboard.js?v=22';
+
 const html = htm.bind(h);
 
 // API configuration - production URL with local development fallback
@@ -599,16 +601,11 @@ function GameHistory() {
 
 // Available AI models
 const AI_MODELS = [
-  { id: 'gpt-5.2-pro', name: 'GPT-5.2 Pro', description: 'Most accurate (slow)', warning: 'May take 2-5+ min' },
-  { id: 'gpt-5.2', name: 'GPT-5.2', description: 'Latest flagship v2' },
-  { id: 'gpt-5.1', name: 'GPT-5.1', description: 'Latest flagship' },
-  { id: 'gpt-5-mini', name: 'GPT-5 Mini', description: 'Fast GPT-5' },
-  { id: 'gpt-4.1', name: 'GPT-4.1', description: 'Fast & capable' },
-  { id: 'gpt-4o', name: 'GPT-4o', description: 'Best quality' },
-  { id: 'gpt-4o-mini', name: 'GPT-4o Mini', description: 'Fast & efficient' },
-  { id: 'gpt-4.1-nano', name: 'GPT-4.1 Nano', description: 'Ultra fast' },
-  { id: 'o3', name: 'o3', description: 'Advanced reasoning', warning: 'May take 2-5+ min' },
-  { id: 'o4-mini', name: 'o4-mini', description: 'Efficient reasoning' },
+  { id: 'openai/gpt-6-luna', name: 'GPT-6 Luna', description: 'Fast and economical' },
+  { id: 'google/gemini-3.8-flash', name: 'Gemini 3.8 Flash', description: 'Quick clue generation' },
+  { id: 'anthropic/claude-sonnet-5.5', name: 'Claude Sonnet 5.5', description: 'Alternative clue style' },
+  { id: 'openai/gpt-6-sol', name: 'GPT-6 Sol', description: 'Established reasoning model' },
+  { id: 'openai/gpt-6.1-sol', name: 'GPT-6.1 Sol', description: 'Stronger reasoning' },
 ];
 
 // Models that support reasoning_effort parameter
@@ -624,12 +621,12 @@ function requiresBackgroundMode(modelId) {
 
 // Check if a model supports reasoning effort
 function supportsReasoningEffort(modelId) {
-  return REASONING_MODELS.some(m => modelId.startsWith(m));
+  return AI_MODELS.some(m => m.id === modelId) || REASONING_MODELS.some(m => modelId.startsWith(m));
 }
 
 // Default models for each role type
-const DEFAULT_SPYMASTER_MODEL = 'gpt-4o';
-const DEFAULT_GUESSER_MODEL = 'gpt-4o-mini';
+const DEFAULT_SPYMASTER_MODEL = 'google/gemini-3.8-flash';
+const DEFAULT_GUESSER_MODEL = 'openai/gpt-6-luna';
 
 // Setup Screen (Host)
 function Setup({ gameState, onConfigure, onStart, onBack, error, roomCode }) {
@@ -663,7 +660,7 @@ function Setup({ gameState, onConfigure, onStart, onBack, error, roomCode }) {
 
   // Simulation settings for AI spymaster
   const [simulationCount, setSimulationCount] = useState(gameState?.simulationCount || 0);
-  const [simulationModel, setSimulationModel] = useState(gameState?.simulationModel || 'gpt-4o');
+  const [simulationModel, setSimulationModel] = useState(gameState?.simulationModel || DEFAULT_GUESSER_MODEL);
 
   // Presets UI/state (saved in localStorage on this device)
   const [presets, setPresets] = useState([]);
@@ -2596,7 +2593,12 @@ function HostView({ roomCode, onLeave, onReplay }) {
 
 // Main App Component
 function App() {
-  const [screen, setScreen] = useState('home');
+  const [screen, setScreen] = useState(window.location.hash === '#leaderboard' ? 'leaderboard' : 'home');
+  useEffect(() => {
+    const update = () => setScreen(window.location.hash === '#leaderboard' ? 'leaderboard' : 'home');
+    window.addEventListener('hashchange', update);
+    return () => window.removeEventListener('hashchange', update);
+  }, []);
   const [roomCode, setRoomCode] = useState(null);
   const [gameState, setGameState] = useState(null);
   const [player, setPlayer] = useState(null);
@@ -2677,6 +2679,9 @@ function App() {
   };
 
   return html`
+    ${['home', 'leaderboard'].includes(screen) && html`<nav class="site-tabs" aria-label="Main navigation"><button class=${screen === 'home' ? 'selected' : ''} onClick=${() => {window.location.hash = ''; setScreen('home');}}>Play</button><button class=${screen === 'leaderboard' ? 'selected' : ''} onClick=${() => {window.location.hash = 'leaderboard'; setScreen('leaderboard');}}>Leaderboard</button></nav>`}
+    ${screen === 'leaderboard' && html`<${Leaderboard} />`}
+
     ${screen === 'home' && html`
       <${Home}
         onHostGame=${handleHostGame}

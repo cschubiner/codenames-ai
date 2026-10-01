@@ -1304,3 +1304,76 @@ body {
   border-radius: 4px;
   font-size: 0.8rem;
 }
+
+/* Model arena */
+.site-tabs { display:flex; justify-content:center; gap:8px; padding:18px; border-bottom:1px solid #e6e7eb; }
+.site-tabs button { background:transparent; color:#626879; border:0; border-radius:8px; padding:10px 24px; cursor:pointer; font:inherit; font-weight:600; }
+.site-tabs button.selected { background:#152337; color:white; }
+.arena { --ink:#152337; --muted:#657184; max-width:1180px; margin:0 auto; padding:44px 24px 70px; color:var(--ink); }
+.arena-hero { display:flex; align-items:center; justify-content:space-between; gap:40px; padding:16px 0 34px; }
+.arena-eyebrow { letter-spacing:.18em; font-size:11px; font-weight:800; color:#677689; }
+.arena h1 { font-size:clamp(36px,5vw,60px); line-height:1.07; letter-spacing:-.045em; margin:18px 0; color:var(--ink); }
+.arena-intro { max-width:510px; color:var(--muted); font-size:17px; line-height:1.6; }
+.arena-status { display:flex; flex-direction:column; align-items:flex-start; gap:12px; background:#f2f5f8; border:1px solid #e2e8ef; border-radius:18px; padding:25px; min-width:235px; }
+.arena-status>strong { font-size:48px; line-height:1; letter-spacing:-.04em; }
+.arena-status>span:not(.arena-pill), .arena-status small { color:var(--muted); font-size:12px; max-width:220px; }
+.arena-pill { border-radius:100px; padding:6px 10px; background:#fff0d8; color:#866019; font-size:11px; font-weight:700; white-space:nowrap; }
+.arena-pill.muted { background:#eef2f7; color:#5d6e85; }
+.arena-facts { display:flex; gap:24px; flex-wrap:wrap; border-top:1px solid #e3e8ee; border-bottom:1px solid #e3e8ee; padding:17px 0; font-size:12px; color:var(--muted); }
+.arena-facts b { color:var(--ink); }
+.arena-role-tabs { display:flex; gap:8px; margin:30px 0 22px; }
+.arena-role-tabs button { font:inherit; font-weight:700; background:#edf1f6; color:#5c6b80; padding:12px 24px; border:0; border-radius:10px; cursor:pointer; }
+.arena-role-tabs button.selected { background:#152337; color:white; }
+.arena-section { padding:25px 0; border-bottom:1px solid #e3e8ee; }
+.arena-section-head { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:20px; }
+.arena h2 { font-size:23px; letter-spacing:-.025em; margin:0 0 8px; }
+.arena h3 { font-size:16px; margin:24px 0 12px; }
+.arena-section p { color:var(--muted); font-size:13px; line-height:1.65; margin:6px 0 16px; }
+.arena-table-scroll { overflow-x:auto; }
+.arena table { width:100%; border-collapse:collapse; font-size:12px; text-align:left; }
+.arena th { font-weight:600; }
+.arena-rankings th, .arena-rankings td { padding:17px 10px; border-bottom:1px solid #edf0f4; white-space:nowrap; }
+.arena-rankings thead { background:#f5f7fa; color:#657184; font-size:10px; }
+.arena-rankings tbody th { min-width:190px; }
+.arena-rank { color:#98a4b3; font-size:11px; margin-right:12px; }
+.arena-score { font-weight:800; font-size:17px; }
+.arena .arena-footnote { font-size:11px; margin-top:14px; }
+.arena-matrix { min-width:620px; }
+.arena-matrix th { padding:12px; color:#657184; font-size:11px; }
+.arena-matrix tbody th { min-width:150px; color:#152337; }
+.arena-matrix td { padding:5px; text-align:center; }
+.arena-match { display:flex; flex-direction:column; align-items:center; justify-content:center; width:100%; min-height:75px; border:1px solid #e5e9ef; background:#f3f5f8; border-radius:10px; color:#617188; cursor:pointer; gap:8px; }
+.arena-match strong { font-size:20px; }
+.arena-match small { font-size:10px; }
+.arena-match.positive { background:#e7f3ed; color:#277150; border-color:#d3eade; }
+.arena-match.negative { background:#fcf0eb; color:#a05a40; border-color:#f0dfd6; }
+.arena-match.active { outline:2px solid #152337; outline-offset:2px; }
+.arena-match:disabled { cursor:default; opacity:.6; }
+.arena-diagonal { color:#c1cbd6; }
+.arena-clear { border:1px solid #d7dfe8; background:white; color:#657184; padding:8px 12px; border-radius:8px; cursor:pointer; }
+.arena-partners { display:flex; gap:12px; flex-wrap:wrap; }
+.arena-partners>div { display:flex; flex-direction:column; gap:10px; padding:20px; border-radius:12px; background:#f3f6f9; min-width:180px; }
+.arena-partners strong { font-size:28px; }
+.arena-partners small { color:#657184; }
+.arena-replay-picker { display:flex; flex-direction:column; gap:10px; font-size:12px; }
+.arena-replay-picker select { font:inherit; border:1px solid #d7dfe8; border-radius:9px; padding:13px; background:white; color:#152337; max-width:100%; }
+.arena-teams { display:flex; gap:16px; margin:25px 0; }
+.arena-teams>div { flex:1; display:flex; flex-direction:column; gap:9px; font-size:12px; background:#f4f6f9; padding:18px; border-radius:12px; }
+.arena-board { display:grid; grid-template-columns:repeat(5,1fr); gap:8px; }
+.arena-board>div { text-align:center; padding:16px 4px; border-radius:8px; font-size:12px; font-weight:700; }
+.arena-board small { display:block; font-weight:400; font-size:9px; margin-top:7px; text-transform:uppercase; }
+.arena-board .red { background:#fce2df; color:#9b443b; }
+.arena-board .blue { background:#ddeafb; color:#326294; }
+.arena-board .neutral { background:#ede9df; color:#786b51; }
+.arena-board .assassin { background:#152337; color:white; }
+.arena-turns { padding-left:22px; }
+.arena-turns li { padding:16px 0; border-bottom:1px solid #edf0f4; }
+.arena-team-label { text-transform:uppercase; font-size:10px; font-weight:800; margin-right:12px; }
+.arena-team-label.red { color:#ab4b40; }.arena-team-label.blue { color:#3f6ea3; }
+.arena-turns details { font-size:12px; color:#657184; }
+.arena .arena-invalid { color:#ac5940; }
+.arena-method summary { cursor:pointer; font-weight:600; }
+.arena-method p:first-of-type { margin-top:20px; }
+.arena-method a { color:#326294; font-size:13px; }
+.arena-fingerprint { overflow-wrap:anywhere; font-family:monospace; font-size:10px!important; }
+@media(max-width:700px) { .arena { padding:20px 16px 50px; }.arena-hero { flex-direction:column; align-items:stretch; gap:16px; }.arena-status { min-width:0; }.arena-section-head { align-items:flex-start; flex-direction:column; }.arena-teams { flex-direction:column; }.arena-board { gap:4px; }.arena-board>div { font-size:9px; padding:12px 2px; } }
