@@ -62,3 +62,7 @@ npm --prefix worker run typecheck
 npm --prefix worker run lint
 npm --prefix worker test
 ```
+
+### Leaderboard views
+
+Spymaster and guesser views compare contenders in the same role. Both combined gives each role equal weight within every opponent matchup. The separate partner matrix fixes the roles: rows are spymasters, columns are guessers. It includes team appearances from both leagues, counting each game once for each team. Select a cell to filter game replays. Partner win rates depend on the opposing teams in this schedule and are descriptive, not an isolated measure of compatibility. These views reuse published games without additional API calls.

@@ -1377,3 +1377,7 @@ body {
 .arena-method a { color:#326294; font-size:13px; }
 .arena-fingerprint { overflow-wrap:anywhere; font-family:monospace; font-size:10px!important; }
 @media(max-width:700px) { .arena { padding:20px 16px 50px; }.arena-hero { flex-direction:column; align-items:stretch; gap:16px; }.arena-status { min-width:0; }.arena-section-head { align-items:flex-start; flex-direction:column; }.arena-teams { flex-direction:column; }.arena-board { gap:4px; }.arena-board>div { font-size:9px; padding:12px 2px; } }
+
+.arena-role-tabs { flex-wrap:wrap; }
+.arena-partner-leader { padding:16px 20px; background:#edf4f0; border-radius:10px; }
+.arena-partner-detail { margin-top:24px; padding:20px; border:1px solid #d3eade; border-radius:10px; }

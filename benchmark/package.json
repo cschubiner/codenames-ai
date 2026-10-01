@@ -1,1 +1,1 @@
-{"private":true,"type":"module","scripts":{"run":"node run.mjs","test":"node --test tests.mjs","export":"node run.mjs --export"}}
+{"private":true,"type":"module","scripts":{"run":"node run.mjs","test":"node --test tests.mjs leaderboard-tests.mjs","export":"node run.mjs --export"}}
