@@ -67,7 +67,7 @@ test('HTTP 200 with an upstream error is shown as a temporary service failure', 
   await assert.rejects(generateAIClue('sk-or-test', board, 'red'), /temporarily unavailable/);
 });
 
-for (const model of ['openai/gpt-6-luna', 'google/gemini-3.8-flash', 'anthropic/claude-sonnet-5.5', 'openai/gpt-6-sol']) {
+for (const model of ['openai/gpt-6-luna', 'google/gemini-3.8-flash', 'anthropic/claude-sonnet-5.5', 'anthropic/claude-opus-5.5', 'anthropic/claude-fable-5.1', 'openai/gpt-6-astra', 'openai/gpt-6.1-sol', 'google/gemini-3.1-pro-preview', 'openai/gpt-6-sol']) {
   test(`OpenRouter forwards low reasoning for ${model} without temperature`, async (t) => {
     t.mock.method(globalThis, 'fetch', async (_, init) => {
       const body = JSON.parse(init.body);

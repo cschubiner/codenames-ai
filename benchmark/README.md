@@ -66,3 +66,19 @@ npm --prefix worker test
 ### Leaderboard views
 
 Spymaster and guesser views compare contenders in the same role. Both combined gives each role equal weight within every opponent matchup. The separate partner matrix fixes the roles: rows are spymasters, columns are guessers. It includes team appearances from both leagues, counting each game once for each team. Select a cell to filter game replays. Partner win rates depend on the opposing teams in this schedule and are descriptive, not an isolated measure of compatibility. These views reuse published games without additional API calls.
+
+### Expanded model comparison
+
+The expanded roster adds Claude Opus 5.5, GPT-6 Astra, GPT-6.1 Sol, and Gemini 3.1 Pro Preview. Claude Fable 5.1 is listed as unavailable because the account's existing zero-data-retention guardrail blocks its providers. The original four-model results remain selectable on the site.
+
+The expanded run uses one fresh board (seed 20261020), one seeded partner pair per contender matchup, and the original four models as the eligible reference partner panel. Every contender meets every other contender in both roles, with teammates and sides swapped. This produces 224 games for eight models. The panel excludes both contenders; it limits cost while testing cross-model communication. Partner coverage is sparse, and untested partnerships stay blank. This single-board run is exploratory and should not be compared as if it had the original run's five-board coverage.
+
+```sh
+node benchmark/run.mjs --boards 1 --seed 20261020 --budget 30 \
+  --models openai/gpt-6-luna,google/gemini-3.8-flash,anthropic/claude-sonnet-5.5,openai/gpt-6-sol,anthropic/claude-opus-5.5,openai/gpt-6-astra,openai/gpt-6.1-sol,google/gemini-3.1-pro-preview \
+  --partner-panel openai/gpt-6-luna,google/gemini-3.8-flash,anthropic/claude-sonnet-5.5,openai/gpt-6-sol \
+  --partner-pairs 1 --out benchmark/runs.local/expanded-october-2026-v2 \
+  --publish docs/benchmark-results-expanded.json --concurrency 8
+```
+
+Provide unavailable-model notes with `--unavailable-file <json-path>` when starting a run. Resume requires the same roster, partner panel, board settings, budget, and code. The existing key's $45 lifetime cap covers both runs and all probes; the expanded runner ceiling is $30.

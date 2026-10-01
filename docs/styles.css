@@ -1381,3 +1381,8 @@ body {
 .arena-role-tabs { flex-wrap:wrap; }
 .arena-partner-leader { padding:16px 20px; background:#edf4f0; border-radius:10px; }
 .arena-partner-detail { margin-top:24px; padding:20px; border:1px solid #d3eade; border-radius:10px; }
+
+.arena-run-picker { display:flex; gap:16px; align-items:center; font-size:13px; font-weight:600; margin-top:24px; flex-wrap:wrap; }
+.arena-run-picker select { font:inherit; padding:10px 14px; border:1px solid #d9e0e8; border-radius:8px; background:white; }
+.arena-run-note, .arena-unavailable { color:#657184; font-size:12px; line-height:1.6; }
+.arena-unavailable { background:#fff6e8; padding:12px 16px; border-radius:8px; }

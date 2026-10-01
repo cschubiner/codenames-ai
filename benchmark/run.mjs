@@ -3,7 +3,7 @@ import { resolve, join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { loadEngine, MemoryStorage, action } from './engine.mjs';
-import { MODELS, schedule, makeBoard, summarize, reserveCost, reserveCall } from './core.mjs';
+import { MODELS, AVAILABLE_MODELS, schedule, makeBoard, summarize, reserveCost, reserveCall } from './core.mjs';
 const args = process.argv.slice(2);
 const option = (key, fallback) => args.includes(key) ? args[args.indexOf(key)+1] : fallback;
 const root = resolve(new URL('../',import.meta.url).pathname);
@@ -17,19 +17,27 @@ const seed = Number(option('--seed','20261001'));
 const maxBlocks = Number(option('--max-blocks','Infinity'));
 const budget = Number(option('--budget','45'));
 if(!Number.isInteger(boardCount)||boardCount<1||!Number.isFinite(budget)||budget<=0||budget>45) throw new Error('Use a positive board count and budget at most $45.');
+const modelIds = option('--models',MODELS.map(m=>m.id).join(',')).split(',');
+const models = modelIds.map(id=>{const model=AVAILABLE_MODELS.find(m=>m.id===id);if(!model) throw new Error('Unknown model: '+id);return model;});
+if(new Set(modelIds).size!==modelIds.length||models.length<4) throw new Error('Choose at least four distinct models.');
+const partnerPanel = args.includes('--partner-panel') ? option('--partner-panel','').split(',') : null;
+const partnerPairs = Number(option('--partner-pairs','0'));
+if(!Number.isInteger(partnerPairs)||partnerPairs<0) throw new Error('Partner pairs must be a nonnegative integer.');
+if(partnerPanel && partnerPanel.some(id=>!modelIds.includes(id))) throw new Error('Partner panel must be part of the model roster.');
 const fingerprint = createHash('sha256').update(engine.fingerprint+readFileSync(new URL('core.mjs',import.meta.url))+readFileSync(new URL('run.mjs',import.meta.url))).digest('hex');
 let manifest = load('manifest.json', null);
 if(!manifest) {
-  manifest={ id:'codenames-'+Date.now(), createdAt:new Date().toISOString(), fingerprint, engineFingerprint:engine.fingerprint, seed, boardCount, simulations:0, reasoningEffort:'low', models:MODELS, unavailableModels:[{id:'openai/gpt-6.1-sol',reason:'Persistent upstream rate limits during cost checks; replaced by GPT-6 Sol in this run.'}], giveAIPastTurnInfo:true, assassinBehavior:'instant_loss', maxTokens:4096, maxTurns:40, budgetUsd:budget, methodology:'Two role leagues. Each pair has two distinct partner models excluding both contenders. Four-game blocks swap partners and starting sides on identical boards. Only complete blocks enter rankings; opponents have equal weight. 95% bootstrap intervals resample boards. Draws score 0.5. Illegal actions lose the turn; provider failures are excluded.', blocks:schedule(boardCount,seed).slice(0,maxBlocks), boards:Array.from({length:boardCount},(_,i)=>makeBoard(engine.wordlist,seed+i)) };
+  manifest={ id:'codenames-'+Date.now(), createdAt:new Date().toISOString(), fingerprint, engineFingerprint:engine.fingerprint, seed, boardCount, simulations:0, reasoningEffort:'low', models, partnerPanel, partnerPairs, unavailableModels:args.includes('--unavailable-file')?JSON.parse(readFileSync(resolve(option('--unavailable-file','')),'utf8')):[{id:'openai/gpt-6.1-sol',reason:'Persistent upstream rate limits during cost checks; replaced by GPT-6 Sol in this run.'}], giveAIPastTurnInfo:true, assassinBehavior:'instant_loss', maxTokens:4096, maxTurns:40, budgetUsd:budget, methodology:'Two role leagues. Each pair has two distinct partner models excluding both contenders. Four-game blocks swap partners and starting sides on identical boards. Only complete blocks enter rankings; opponents have equal weight. 95% bootstrap intervals resample boards. Draws score 0.5. Illegal actions lose the turn; provider failures are excluded.', blocks:schedule(boardCount,seed,models,{partnerPanel,partnerPairs}).slice(0,maxBlocks), boards:Array.from({length:boardCount},(_,i)=>makeBoard(engine.wordlist,seed+i)) };
+  if(partnerPanel) manifest.methodology += ' Budget-limited partner panel: '+partnerPanel.join(', ')+'. '+partnerPairs+' seeded partner pair per contender matchup and board. This run has limited board and partner coverage; untested partnerships are blank.';
   save('manifest.json',manifest);
-} else if (!args.includes('--export') && (manifest.fingerprint!==fingerprint || manifest.boardCount!==boardCount || manifest.seed!==seed || manifest.budgetUsd!==budget)) {
+} else if (!args.includes('--export') && (manifest.fingerprint!==fingerprint || manifest.boardCount!==boardCount || manifest.seed!==seed || manifest.budgetUsd!==budget || JSON.stringify(manifest.models)!==JSON.stringify(models) || JSON.stringify(manifest.partnerPanel??null)!==JSON.stringify(partnerPanel) || (manifest.partnerPairs??0)!==partnerPairs)) {
   throw new Error('Run settings or code changed. Keep this run immutable; use a different --out directory.');
 }
 const results=load('games.json',{}), ledger=load('ledger.json',{calls:[]});
 const publicPath=resolve(option('--publish',join(root,'docs/benchmark-results.json')));
 function publish() { const value=summarize(manifest,results,ledger); writeFileSync(publicPath+'.tmp',JSON.stringify(value)); renameSync(publicPath+'.tmp',publicPath); return value; }
 if(args.includes('--export')) { console.log(JSON.stringify({exported:publicPath,completedGames:publish().completedGames})); process.exit(0); }
-if(args.includes('--dry-run')) { console.log(JSON.stringify({boards:manifest.boardCount,blocks:manifest.blocks.length,games:manifest.blocks.length*4,budgetUsd:budget,simulations:0,models:MODELS},null,2)); process.exit(0); }
+if(args.includes('--dry-run')) { console.log(JSON.stringify({boards:manifest.boardCount,blocks:manifest.blocks.length,games:manifest.blocks.length*4,budgetUsd:budget,simulations:0,models},null,2)); process.exit(0); }
 const lockPath=join(directory,'run.lock');
 let lock;
 try { lock=openSync(lockPath,'wx'); writeFileSync(lock,String(process.pid)); } catch { throw new Error('This run is locked. Check the PID in run.lock; remove the lock only if that process has stopped.'); }
@@ -45,7 +53,7 @@ if(!infoResponse.ok) throw new Error('Cannot verify benchmark key limits.');
 const info=(await infoResponse.json()).data;
 if(info.limit == null || info.limit>45 || info.limit_reset != null) throw new Error('Benchmark key must have a nonrenewing total limit of at most $45.');
 const catalog=await (await originalFetch('https://openrouter.ai/api/v1/models')).json();
-const prices=Object.fromEntries(MODELS.map(m=>{
+const prices=Object.fromEntries(models.map(m=>{
   const entry=catalog.data.find(e=>e.id===m.id);
   if(!entry?.supported_parameters.includes('structured_outputs')) throw new Error(`Structured output unavailable: ${m.id}`);
   const price={prompt:Number(entry.pricing.prompt),completion:Number(entry.pricing.completion)};

@@ -3,7 +3,7 @@ import { h, render } from 'https://esm.sh/preact@10.19.3';
 import { useState, useEffect, useCallback, useRef } from 'https://esm.sh/preact@10.19.3/hooks';
 import htm from 'https://esm.sh/htm@3.1.1';
 
-import { Leaderboard } from './leaderboard.js?v=23';
+import { Leaderboard } from './leaderboard.js?v=24';
 
 const html = htm.bind(h);
 
@@ -606,6 +606,10 @@ const AI_MODELS = [
   { id: 'anthropic/claude-sonnet-5.5', name: 'Claude Sonnet 5.5', description: 'Alternative clue style' },
   { id: 'openai/gpt-6-sol', name: 'GPT-6 Sol', description: 'Established reasoning model' },
   { id: 'openai/gpt-6.1-sol', name: 'GPT-6.1 Sol', description: 'Stronger reasoning' },
+  { id: 'anthropic/claude-opus-5.5', name: 'Claude Opus 5.5', description: 'Flagship reasoning' },
+  { id: 'anthropic/claude-fable-5.1', name: 'Claude Fable 5.1 (unavailable: retention policy)', unavailable: true },
+  { id: 'openai/gpt-6-astra', name: 'GPT-6 Astra', description: 'Flagship reasoning' },
+  { id: 'google/gemini-3.1-pro-preview', name: 'Gemini 3.1 Pro Preview', description: 'Pro reasoning' },
 ];
 
 // Models that support reasoning_effort parameter
@@ -1105,7 +1109,7 @@ function Setup({ gameState, onConfigure, onStart, onBack, error, roomCode }) {
                   style="font-size: 0.85rem; padding: 0.4rem;"
                 >
                   ${AI_MODELS.map(m => html`
-                    <option value=${m.id}>${m.name}</option>
+                    <option value=${m.id} disabled=${m.unavailable}>${m.name}</option>
                   `)}
                 </select>
               </div>
@@ -1183,7 +1187,7 @@ function Setup({ gameState, onConfigure, onStart, onBack, error, roomCode }) {
                           style="font-size: 0.85rem; padding: 0.4rem; flex: 1; min-width: 120px;"
                         >
                           ${AI_MODELS.map(m => html`
-                            <option value=${m.id}>${m.name}</option>
+                            <option value=${m.id} disabled=${m.unavailable}>${m.name}</option>
                           `)}
                         </select>
                         ${supportsReasoningEffort(entry.model) && html`

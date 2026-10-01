@@ -4,6 +4,13 @@ export const MODELS = [
   { id: 'anthropic/claude-sonnet-5.5', name: 'Claude Sonnet 5.5' },
   { id: 'openai/gpt-6-sol', name: 'GPT-6 Sol' },
 ];
+export const AVAILABLE_MODELS = [...MODELS,
+  { id: 'anthropic/claude-opus-5.5', name: 'Claude Opus 5.5' },
+  { id: 'anthropic/claude-fable-5.1', name: 'Claude Fable 5.1' },
+  { id: 'openai/gpt-6-astra', name: 'GPT-6 Astra' },
+  { id: 'openai/gpt-6.1-sol', name: 'GPT-6.1 Sol' },
+  { id: 'google/gemini-3.1-pro-preview', name: 'Gemini 3.1 Pro Preview' },
+];
 export function seeded(seed) {
   return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t ^= t + Math.imul(t ^ t >>> 7, 61 | t); return ((t ^ t >>> 14) >>> 0) / 4294967296; };
 }
@@ -16,12 +23,16 @@ export function makeBoard(words, seed) {
   const random = seeded(seed);
   return { words: shuffle(words, random).slice(0, 25), key: shuffle([...Array(9).fill('red'), ...Array(8).fill('blue'), ...Array(7).fill('neutral'), 'assassin'], random) };
 }
-export function schedule(boardCount, seed = 20261001, models = MODELS) {
+export function schedule(boardCount, seed = 20261001, models = MODELS, options = {}) {
   const blocks = [];
   for (let board = 0; board < boardCount; board++) for (const role of ['spymaster', 'guesser']) {
     for (let a = 0; a < models.length; a++) for (let b = a + 1; b < models.length; b++) {
-      const partners = models.filter((_, i) => i !== a && i !== b);
-      for (let x = 0; x < partners.length; x++) for (let y = x + 1; y < partners.length; y++) {
+      const partners = models.filter((m, i) => i !== a && i !== b && (!options.partnerPanel || options.partnerPanel.includes(m.id)));
+      if(partners.length<2) throw new Error('Every matchup needs at least two eligible partner models.');
+      const pairs = [];
+      for(let x=0;x<partners.length;x++) for(let y=x+1;y<partners.length;y++) pairs.push([x,y]);
+      const selected = options.partnerPairs ? shuffle(pairs,seeded(seed+board*10000+a*100+b)).slice(0,options.partnerPairs) : pairs;
+      for (const [x,y] of selected) {
         const blockId = `${board}-${role}-${a}-${b}-${x}-${y}`;
         const games = [];
         for (let swap = 0; swap < 2; swap++) for (let side = 0; side < 2; side++) {

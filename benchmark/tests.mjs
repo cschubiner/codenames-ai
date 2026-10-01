@@ -67,3 +67,23 @@ test('shared guesser prompt contains no secret key or intended targets',async(t)
  });
  await engine.generateAIGuesses('sk-or-test',{words:['APPLE','BOMB'],key:['red','assassin'],revealed:[false,false],redRemaining:1,blueRemaining:1,giveAIPastTurnInfo:true,clueHistory:[{word:'Earlier',number:1,team:'red',intendedTargets:['PRIVATE_SECRET_TARGET'],guesses:[]}],currentClue:{intendedTargets:['PRIVATE_SECRET_TARGET']}},'Fruit',1,'red','google/gemini-3.8-flash','low');
 });
+
+test('expanded panel gives every contender all opponents, balanced partners and sides',()=>{
+ const extra=[...MODELS,...['opus','astra','sol61','geminiPro'].map(id=>({id,name:id}))];
+ const panel=MODELS.map(m=>m.id);
+ const blocks=schedule(1,20261020,extra,{partnerPanel:panel,partnerPairs:1});
+ assert.equal(blocks.length,56);
+ for(const role of ['spymaster','guesser']) for(const m of extra){
+  const mine=blocks.filter(b=>b.games[0].role===role && [b.games[0].a,b.games[0].b].includes(m.id));
+  assert.equal(mine.length,7);
+  for(const b of mine){
+   assert.deepEqual(b.games.map(g=>g.aTeam),['red','blue','red','blue']);
+   const other=role==='spymaster'?'guesser':'spymaster';
+   for(const g of b.games) for(const team of ['red','blue']){
+    assert.ok(panel.includes(g.seats[team][other]));
+    assert.ok(![g.a,g.b].includes(g.seats[team][other]));
+   }
+  }
+ }
+ assert.throws(()=>schedule(1,1,extra,{partnerPanel:[extra[0].id,extra[1].id],partnerPairs:1}),/two eligible/);
+});
