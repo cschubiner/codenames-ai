@@ -12,7 +12,7 @@ const { outputText } = ts.transpileModule(source, {
   compilerOptions: { target: ts.ScriptTarget.ES2021, module: ts.ModuleKind.ES2022 },
 });
 await writeFile(join(buildDir, 'ai.mjs'), outputText);
-const { generateAIClue, requiresBackgroundMode } = await import(pathToFileURL(join(buildDir, 'ai.mjs')));
+const { generateAIClue, generateAIGuesses, buildSpymasterPrompt, buildGuesserPrompt, requiresBackgroundMode } = await import(pathToFileURL(join(buildDir, 'ai.mjs')));
 after(() => rm(buildDir, { recursive: true, force: true }));
 const board = {
   words: ['APPLE', 'PEAR', 'MOON', 'BOMB'],
@@ -79,3 +79,41 @@ for (const model of ['openai/gpt-6-luna', 'google/gemini-3.8-flash', 'anthropic/
     await generateAIClue('sk-or-test', board, 'red', model, 'low');
   });
 }
+
+for (const team of ['red', 'blue']) {
+  test(`last-chance prompts cover both roles for ${team}, even without history`, async (t) => {
+    const state = { ...board, redRemaining: team === 'red' ? 2 : 1, blueRemaining: team === 'blue' ? 2 : 1 };
+    const spy = buildSpymasterPrompt(state, team);
+    const guesser = buildGuesserPrompt(state, 'Fruit', 2, team);
+    assert.match(spy, /ALL 2 remaining team words, with number 2/);
+    assert.match(spy, /planning assumption, not a guaranteed outcome/);
+    assert.match(guesser, /at most 3 guesses/);
+    assert.match(guesser, /Assume they will find it and win/);
+    const prompts = [];
+    t.mock.method(globalThis, 'fetch', async (_, init) => {
+      prompts.push(JSON.parse(init.body).messages[0].content);
+      return Response.json({ choices: [{ message: { content: JSON.stringify(clue) } }] });
+    });
+    await generateAIClue('sk-or-test', state, team);
+    await generateAIGuesses('sk-or-test', state, 'Fruit', 2, team);
+    assert.equal(prompts[0], spy);
+    assert.equal(prompts[1], guesser);
+    const normal = { ...state, redRemaining: 3, blueRemaining: 3 };
+    assert.doesNotMatch(buildSpymasterPrompt(normal, team), /Last-Chance Strategy/);
+    assert.doesNotMatch(buildGuesserPrompt(normal, 'Fruit', 2, team), /Last-Chance Strategy/);
+  });
+}
+
+test('guesser uses unresolved past clues without exposing hidden targets or claiming exact counts', () => {
+  const state = { ...board, blueRemaining: 3, giveAIPastTurnInfo: true,
+    clueHistory: [{ team: 'red', word: 'Orchard', number: 2, intendedTargets: ['SECRET_TARGET'],
+      guesses: [{ word: 'APPLE', cardType: 'red' }] }] };
+  const prompt = buildGuesserPrompt(state, 'Round', 1, 'red');
+  assert.match(prompt, /Orchard/);
+  assert.match(prompt, /APPLE/);
+  assert.match(prompt, /leftover word need not also fit the current clue/);
+  assert.match(prompt, /not an exact count of distinct remaining targets/);
+  assert.doesNotMatch(prompt, /SECRET_TARGET|Opponent's Words|THE ASSASSIN/);
+  const disabled = buildGuesserPrompt({ ...state, giveAIPastTurnInfo: false }, 'Round', 1, 'red');
+  assert.doesNotMatch(disabled, /Orchard|Past Clues/);
+});

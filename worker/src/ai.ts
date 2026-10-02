@@ -318,7 +318,7 @@ function buildGuesserHistorySection(gameState: GameState, team: Team): string {
 
   if (totalOutstanding > 0) {
     section += `## Key Strategic Insight: Outstanding Words\n`;
-    section += `You have approximately **${totalOutstanding} outstanding word(s)** from previous clues that you haven't found yet.\n\n`;
+    section += `Earlier clues have **${totalOutstanding} unmatched clue slots**. This is not an exact count of distinct remaining targets: clues can overlap, and a target may have been revealed on a later turn. Recheck only currently unrevealed words.\n\n`;
     section += `When analyzing the current clue, also consider:\n`;
     for (const oc of outstandingClues) {
       section += `- "${oc.clue}" (gave ${oc.number}, found ${oc.guessedCorrect}) - look for ${oc.number - oc.guessedCorrect} more word(s) related to this\n`;
@@ -327,6 +327,17 @@ function buildGuesserHistorySection(gameState: GameState, team: Team): string {
   }
 
   return section;
+}
+
+/** Shared across normal, background, and candidate prompts. */
+function buildEndgameStrategy(gameState: GameState, team: Team, role: 'spymaster' | 'guesser', clueNumber?: number): string {
+  const myRemaining = team === 'red' ? gameState.redRemaining : gameState.blueRemaining;
+  const opponentRemaining = team === 'red' ? gameState.blueRemaining : gameState.redRemaining;
+  if (opponentRemaining !== 1) return '';
+  const strategy = role === 'spymaster'
+    ? `Give a legal one-word clue for ALL ${myRemaining} remaining team words, with number ${myRemaining} and all remaining team words as intendedTargets. Seek the best chance of finishing this turn, even if the connections are riskier than your usual clues. Do not settle for a safe partial clue that leaves words for another turn. Still check the assassin and other dangerous associations.`
+    : `Try to find ALL ${myRemaining} remaining team words this turn, using the current clue${gameState.giveAIPastTurnInfo ? ' and unresolved associations from earlier clues' : ''}. Rank the most likely team words first. Accept more uncertainty than usual instead of stopping merely to save guesses for next turn. You still have at most ${clueNumber! + 1} guesses; never exceed that limit, guess revealed words, or knowingly choose the assassin. Set stopAfter to your planned number of guesses within that limit.`;
+  return `\n\n## Last-Chance Strategy (overrides conservative advice above)\nThe opponent has only ONE word left. Assume they will find it and win on their next turn; do not rely on receiving another turn. This is a planning assumption, not a guaranteed outcome.\n${strategy}`;
 }
 
 /**
@@ -374,7 +385,7 @@ function buildGuesserStrategySection(): string {
 
 ### Prioritizing Guesses
 - **Strongest connections first:** Always guess your most confident word first
-- **The "+1 bonus guess":** You can guess clue_number + 1 words. Use the extra guess for outstanding words from previous clues if you're confident
+- **The "+1 bonus guess":** You can guess clue_number + 1 words. Use the extra guess for outstanding words from previous clues if you're confident. A leftover word need not also fit the current clue. Rank it alongside current-clue candidates and include it in suggestions and stopAfter within the legal guess limit.
 - **Stop when uncertain:** It's often better to end your turn than to guess a word you're unsure about
 
 ### Using Past Clues
@@ -475,6 +486,8 @@ Strategy tips:
 - Balance between connecting many words vs. being too vague
 - It's often better to give a safe clue for 2 words than a risky clue for 4`;
 
+  prompt += buildEndgameStrategy(gameState, team, 'spymaster');
+
   if (customInstructions) {
     prompt += `\n\n## Additional Instructions\n${customInstructions}`;
   }
@@ -570,6 +583,8 @@ Guidelines:
 5. Assign confidence scores (0-1) based on how strongly each word connects to the clue
 6. If you're unsure about later guesses, indicate you should stop early
 7. If you can't find ANY strong connection to the clue, set stopAfter to 0 to pass the turn immediately`;
+
+  prompt += buildEndgameStrategy(gameState, team, 'guesser', clueNumber);
 
   if (customInstructions) {
     prompt += `\n\n## Additional Instructions\n${customInstructions}`;
@@ -763,6 +778,8 @@ Strategy tips:
 - Balance between connecting many words vs. being too vague
 - It's often better to give a safe clue for 2 words than a risky clue for 4`;
 
+  prompt += buildEndgameStrategy(gameState, team, 'spymaster');
+
   if (customInstructions) {
     prompt += `\n\n## Additional Instructions\n${customInstructions}`;
   }
@@ -813,6 +830,8 @@ Guidelines:
 5. Assign confidence scores (0-1) based on how strongly each word connects to the clue
 6. If you're unsure about later guesses, indicate you should stop early
 7. If you can't find ANY strong connection to the clue, set stopAfter to 0 to pass the turn immediately`;
+
+  prompt += buildEndgameStrategy(gameState, team, 'guesser', clueNumber);
 
   if (customInstructions) {
     prompt += `\n\n## Additional Instructions\n${customInstructions}`;
@@ -940,6 +959,8 @@ Strategy tips:
 - Consider word associations your guesser might make
 - Balance between connecting many words vs. being too vague
 - It's often better to give a safe clue for 2 words than a risky clue for 4`;
+
+  prompt += buildEndgameStrategy(gameState, team, 'spymaster');
 
   if (customInstructions) {
     prompt += `\n\n## Additional Instructions\n${customInstructions}`;
