@@ -5,6 +5,7 @@ export const MODELS = [
   { id: 'openai/gpt-6-sol', name: 'GPT-6 Sol' },
 ];
 export const AVAILABLE_MODELS = [...MODELS,
+  { id: 'anthropic/claude-haiku-5.5', name: 'Claude Haiku 5.5' },
   { id: 'anthropic/claude-opus-5.5', name: 'Claude Opus 5.5' },
   { id: 'anthropic/claude-fable-5.1', name: 'Claude Fable 5.1' },
   { id: 'openai/gpt-6-astra', name: 'GPT-6 Astra' },
@@ -27,6 +28,7 @@ export function schedule(boardCount, seed = 20261001, models = MODELS, options =
   const blocks = [];
   for (let board = 0; board < boardCount; board++) for (const role of ['spymaster', 'guesser']) {
     for (let a = 0; a < models.length; a++) for (let b = a + 1; b < models.length; b++) {
+      if (options.contenders && !options.contenders.includes(models[a].id) && !options.contenders.includes(models[b].id)) continue;
       const partners = models.filter((m, i) => i !== a && i !== b && (!options.partnerPanel || options.partnerPanel.includes(m.id)));
       if(partners.length<2) throw new Error('Every matchup needs at least two eligible partner models.');
       const pairs = [];

@@ -99,3 +99,21 @@ test('refusals and malformed model answers are invalid actions, outages are not'
  assert.equal(isInvalidModelAction(new Error('Temporary provider failure')),false);
  assert.equal(responseActionError({choices:[{finish_reason:'stop',message:{content:'{}'}}]}),null);
 });
+
+
+test('focused schedules cover both roles and mixed partnerships without reference-only contests', () => {
+  const models = [{id:'haiku'},{id:'luna'},{id:'flash'},{id:'sol'}];
+  const blocks = schedule(2,20261070,models,{contenders:['haiku','luna']});
+  assert.equal(blocks.length,20);
+  const games = blocks.flatMap(b=>b.games);
+  assert.equal(games.length,80);
+  assert.ok(games.every(g=>[g.a,g.b].some(m=>['haiku','luna'].includes(m))));
+  for(const role of ['spymaster','guesser']) {
+    assert.equal(games.filter(g=>g.role===role && [g.a,g.b].includes('haiku') && [g.a,g.b].includes('luna')).length,8);
+  }
+  for(const [spy,guess] of [['haiku','luna'],['luna','haiku']]) {
+    const pairs=games.flatMap(g=>Object.values(g.seats)).filter(t=>t.spymaster===spy&&t.guesser===guess);
+    assert.ok(pairs.length>0);
+  }
+  assert.ok(games.every(g=>Object.values(g.seats).every(t=>t.spymaster!==t.guesser)));
+});

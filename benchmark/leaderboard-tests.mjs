@@ -62,3 +62,15 @@ test('runner exports cannot replace cumulative history',()=>{
  assert.match(result.stderr,/Refusing to replace cumulative history/);
  assert.equal(readFileSync(file,'utf8'),before);
 });
+
+
+test('additive publication preserves strategy metadata without relabeling older runs', () => {
+ const old={manifest:{id:'baseline',boardCount:1},models,games:[{...game('1','spymaster','red','red'),status:'complete'}],costUsd:1};
+ const newer={...old,manifest:{id:'new',boardCount:1,strategyId:'last_chance_v1',contenders:['a','b']},games:[{...game('1','guesser','blue','blue'),status:'complete',strategyId:'last_chance_v1'}]};
+ const all=accumulate([old,newer]);
+ assert.equal(all.games.length,2);
+ assert.equal(all.manifest.runs.find(r=>r.id==='new').strategyId,'last_chance_v1');
+ assert.deepEqual(all.manifest.runs.find(r=>r.id==='new').contenders,['a','b']);
+ assert.equal(all.games.find(g=>g.runId==='new').strategyId,'last_chance_v1');
+ assert.equal(all.games.find(g=>g.runId==='baseline').strategyId,undefined);
+});

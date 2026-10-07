@@ -1,7 +1,7 @@
 import { h } from 'https://esm.sh/preact@10.19.3';
 import { useState, useEffect } from 'https://esm.sh/preact@10.19.3/hooks';
 import htm from 'https://esm.sh/htm@3.1.1';
-import { combinedLeague, partnerMatrix } from './leaderboard-data.js?v=26';
+import { combinedLeague, partnerMatrix } from './leaderboard-data.js?v=28';
 const html = htm.bind(h);
 const pct = n => n == null ? '—' : `${(n * 100).toFixed(1)}%`;
 const money = n => `$${(n || 0).toFixed(n > 0 && n < .001 ? 5 : 3)}`;
@@ -42,8 +42,10 @@ export function Leaderboard() {
         <div><p class="arena-eyebrow">CODENAMES / MODEL ARENA</p><h1>Good clues.<br/>Better teammates.</h1><p class="arena-intro">Two roles. Different partners. A growing record of how models play together.</p></div>
         <aside class="arena-status"><span class="arena-pill">${data.completedGames ? 'Provisional results' : 'Awaiting first results'}</span><strong>${data.completedGames}</strong><span>${data.manifest.cumulative?'completed games across all runs':'games in completed matchup blocks'}</span><small>Updated ${new Date(data.generatedAt).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'})}</small></aside>
       </header>
-      <label class="arena-run-picker">Benchmark run<select value=${run} onChange=${e=>setRun(e.target.value)}><option value="benchmark-results.json">All games · cumulative</option><option value="benchmark-results-expanded.json">Expanded model comparison</option><option value="benchmark-results-original.json">Original four-model comparison</option></select></label>
-      <p class="arena-run-note">${data.models.length} models · ${data.manifest.boardCount} ${data.manifest.boardCount===1?'board':'boards'} · ${data.manifest.cumulative?'All historical games retained':data.manifest.partnerPanel?'Limited reference partner panel':'All eligible partner pairs'}. ${data.manifest.boardCount<2?'One-board results are exploratory; intervals span the full range.':''}</p>
+      <label class="arena-run-picker">Benchmark run<select value=${run} onChange=${e=>setRun(e.target.value)}><option value="benchmark-results.json">All games · cumulative</option><option value="benchmark-results-haiku-luna.json">Haiku 5.5 vs Luna 6 · last-chance strategy</option><option value="benchmark-results-expanded.json">Expanded model comparison</option><option value="benchmark-results-original.json">Original four-model comparison</option></select></label>
+      <p class="arena-run-note">${data.manifest.strategyId?`Strategy: ${data.manifest.strategyId} · `:''}${data.models.length} models · ${new Set(data.games.map(g=>g.boardId)).size} boards played${data.manifest.cumulative?'':` / ${data.manifest.boardCount} scheduled`} · ${data.manifest.cumulative?'All historical games retained':data.manifest.partnerPanel?'Limited reference partner panel':'All eligible partner pairs'}. ${new Set(data.games.map(g=>g.boardId)).size<2?'One-board results are exploratory; intervals span the full range.':''}</p>
+      ${data.manifest.contenders && html`<p class="arena-run-note">Focused contenders: ${data.manifest.contenders.map(id=>names[id]).join(' / ')}. Direct role contests and mixed partnerships; reference-only contests are omitted.</p>`}
+      ${data.manifest.cumulative && data.manifest.runs?.some(r=>r.strategyId) && html`<p class="arena-run-note">Historical runs use different prompt strategies. Select a specific run for a comparison under the same strategy.</p>`}
       ${data.manifest.unavailableModels?.map(m=>html`<p class="arena-unavailable">${m.id==='anthropic/claude-fable-5.1'?'Claude Fable 5.1':m.id==='openai/gpt-6.1-sol'?'GPT-6.1 Sol':m.id}: ${m.reason}</p>`)}
       <div class="arena-facts"><span><b>Simulations off</b> · one clue per turn</span><span><b>Mixed teams</b> · no same-model partners</span><span><b>${money(data.costUsd)}</b> measured API spend</span></div>
       <div class="arena-role-tabs" role="tablist" aria-label="Benchmark role">

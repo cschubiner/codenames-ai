@@ -19,7 +19,7 @@ export function accumulate(sources) {
       completedBlocks:source.completedBlocks,plannedBlocks:source.plannedBlocks,
       unavailableModels:source.manifest.unavailableModels||[],
       engineFingerprint:source.manifest.engineFingerprint,methodology:source.manifest.methodology,
-      partnerPanel:source.manifest.partnerPanel,createdAt:source.manifest.createdAt,
+      strategyId:source.manifest.strategyId,contenders:source.manifest.contenders,partnerPanel:source.manifest.partnerPanel,createdAt:source.manifest.createdAt,
       keyUsageUsd:source.manifest.keyUsageUsd
     });
     for(const game of source.games) {

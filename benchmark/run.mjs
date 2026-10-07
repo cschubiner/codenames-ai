@@ -21,6 +21,9 @@ if(!Number.isInteger(boardCount)||boardCount<1||!Number.isFinite(budget)||budget
 const modelIds = option('--models',MODELS.map(m=>m.id).join(',')).split(',');
 const models = modelIds.map(id=>{const model=AVAILABLE_MODELS.find(m=>m.id===id);if(!model) throw new Error('Unknown model: '+id);return model;});
 if(new Set(modelIds).size!==modelIds.length||models.length<4) throw new Error('Choose at least four distinct models.');
+const contenders = args.includes('--contenders') ? option('--contenders','').split(',') : null;
+if(contenders && (new Set(contenders).size !== contenders.length || contenders.length<2 || contenders.some(id=>!modelIds.includes(id)))) throw new Error('Choose at least two distinct contenders from the roster.');
+const strategyId = 'last_chance_v1';
 const partnerPanel = args.includes('--partner-panel') ? option('--partner-panel','').split(',') : null;
 const partnerPairs = Number(option('--partner-pairs','0'));
 if(!Number.isInteger(partnerPairs)||partnerPairs<0) throw new Error('Partner pairs must be a nonnegative integer.');
@@ -28,10 +31,11 @@ if(partnerPanel && partnerPanel.some(id=>!modelIds.includes(id))) throw new Erro
 const fingerprint = createHash('sha256').update(engine.fingerprint+readFileSync(new URL('core.mjs',import.meta.url))+readFileSync(new URL('run.mjs',import.meta.url))+readFileSync(new URL('model-actions.mjs',import.meta.url))).digest('hex');
 let manifest = load('manifest.json', null);
 if(!manifest) {
-  manifest={ id:'codenames-'+Date.now(), createdAt:new Date().toISOString(), fingerprint, engineFingerprint:engine.fingerprint, seed, boardCount, simulations:0, reasoningEffort:'low', models, partnerPanel, partnerPairs, unavailableModels:args.includes('--unavailable-file')?JSON.parse(readFileSync(resolve(option('--unavailable-file','')),'utf8')):[], giveAIPastTurnInfo:true, assassinBehavior:'instant_loss', maxTokens:4096, maxTurns:40, budgetUsd:budget, methodology:'Two role leagues. Each pair has two distinct partner models excluding both contenders. Four-game blocks swap partners and starting sides on identical boards. Only complete blocks enter rankings; opponents have equal weight. 95% bootstrap intervals resample boards. Draws score 0.5. Illegal actions lose the turn; provider failures are excluded.', blocks:schedule(boardCount,seed,models,{partnerPanel,partnerPairs}).slice(0,maxBlocks), boards:Array.from({length:boardCount},(_,i)=>makeBoard(engine.wordlist,seed+i)) };
+  manifest={ id:'codenames-'+Date.now(), createdAt:new Date().toISOString(), fingerprint, engineFingerprint:engine.fingerprint, seed, boardCount, simulations:0, reasoningEffort:'low', strategyId, contenders, models, partnerPanel, partnerPairs, unavailableModels:args.includes('--unavailable-file')?JSON.parse(readFileSync(resolve(option('--unavailable-file','')),'utf8')):[], giveAIPastTurnInfo:true, assassinBehavior:'instant_loss', maxTokens:4096, maxTurns:40, budgetUsd:budget, methodology:'Two role leagues. Each pair has two distinct partner models excluding both contenders. Four-game blocks swap partners and starting sides on identical boards. Only complete blocks enter rankings; opponents have equal weight. 95% bootstrap intervals resample boards. Draws score 0.5. Illegal actions lose the turn; provider failures are excluded.', blocks:schedule(boardCount,seed,models,{partnerPanel,partnerPairs,contenders}).slice(0,maxBlocks), boards:Array.from({length:boardCount},(_,i)=>makeBoard(engine.wordlist,seed+i)) };
+  if(contenders) manifest.methodology += ' Focused contenders: '+contenders.join(', ')+'. Only matchups involving a focal contender are scheduled; reference-only matchups are omitted.';
   if(partnerPanel) manifest.methodology += ' Budget-limited partner panel: '+partnerPanel.join(', ')+'. '+partnerPairs+' seeded partner pair per contender matchup and board. This run has limited board and partner coverage; untested partnerships are blank.';
   save('manifest.json',manifest);
-} else if (!args.includes('--export') && (manifest.fingerprint!==fingerprint || manifest.boardCount!==boardCount || manifest.seed!==seed || manifest.budgetUsd!==budget || JSON.stringify(manifest.models)!==JSON.stringify(models) || JSON.stringify(manifest.partnerPanel??null)!==JSON.stringify(partnerPanel) || (manifest.partnerPairs??0)!==partnerPairs)) {
+} else if (!args.includes('--export') && (manifest.fingerprint!==fingerprint || manifest.boardCount!==boardCount || manifest.seed!==seed || manifest.budgetUsd!==budget || JSON.stringify(manifest.models)!==JSON.stringify(models) || JSON.stringify(manifest.partnerPanel??null)!==JSON.stringify(partnerPanel) || (manifest.partnerPairs??0)!==partnerPairs || JSON.stringify(manifest.contenders??null)!==JSON.stringify(contenders))) {
   throw new Error('Run settings or code changed. Keep this run immutable; use a different --out directory.');
 }
 const results=load('games.json',{}), ledger=load('ledger.json',{calls:[]});
@@ -179,7 +183,7 @@ async function play(game) {
     if((await storage.get('gameState')).phase!=='finished') status='draw';
   } catch(e) { status='error';error=e.message.replace(/sk-or-[\w-]+/g,'[redacted]'); }
   const final=await storage.get('gameState');
-  const result={...game,status,error,winner:final.winner,assassinTeam,turns,board:manifest.boards[game.boardId],calls:ledger.calls.filter(c=>c.gameId===game.id)};
+  const result={...game,strategyId:manifest.strategyId,status,error,winner:final.winner,assassinTeam,turns,board:manifest.boards[game.boardId],calls:ledger.calls.filter(c=>c.gameId===game.id)};
   results[game.id]=result;save('games.json',results);publish();
   console.log(JSON.stringify({game:game.id,status,turns:turns.length,winner:final.winner,costUsd:ledger.calls.reduce((s,c)=>s+(c.cost??0),0)}));
 }

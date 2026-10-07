@@ -94,3 +94,26 @@ node benchmark/publish-history.mjs --run benchmark/runs.local/expanded-october-2
 The publisher namespaces game and board identities by run, deduplicates repeated imports, preserves previously completed games even if a later import is partial, and refuses decreasing game counts. The first publish saves the original result file as `docs/benchmark-results-original.json`. Always use this additive publisher for the default `docs/benchmark-results.json`; direct runner exports should target a separate run snapshot.
 
 Model refusals and malformed JSON are invalid actions and end the current turn. Genuine provider errors remain excluded. The runner refuses to overwrite the cumulative public file, including during exports, before making paid calls.
+
+
+### Haiku 5.5 versus Luna 6
+
+The October 7 run uses the `last_chance_v1` prompts and records that strategy ID on every game and run. Historical runs retain their original engine fingerprints; they are not relabeled or rerun. Comparing the new model scores to older runs also changes the prompt strategy, so use the dedicated run for the controlled Haiku/Luna comparison.
+
+Focused contenders play each other in both roles and each reference model (Gemini 3.8 Flash and GPT-6 Sol). Partner and starting-side swaps test both direct competition and Haiku/Luna partnerships in both role orders. Reference-only matchups are omitted. All teams use distinct models. Twenty fresh boards are scheduled; the spending ceiling may stop the run before all 800 games finish. The run snapshot ranks complete four-game blocks, while additive publication preserves every completed game.
+
+```sh
+node benchmark/run.mjs --boards 20 --seed 20261070 --budget 9.80 \
+  --models anthropic/claude-haiku-5.5,openai/gpt-6-luna,google/gemini-3.8-flash,openai/gpt-6-sol \
+  --contenders anthropic/claude-haiku-5.5,openai/gpt-6-luna \
+  --out benchmark/runs.local/haiku-luna-october-2026 \
+  --publish docs/benchmark-results-haiku-luna.json --concurrency 8
+node benchmark/publish-history.mjs --run benchmark/runs.local/haiku-luna-october-2026
+```
+
+The $9.80 runner cap reserves room for the availability probe under a $10 total allowance. The existing $45 nonrenewing provider-key cap remains unchanged. No simulations or paid calls run on the public site.
+
+
+Final October 7 result: 240 games in complete four-game blocks across six fresh boards; one additional completed game is retained in cumulative history. Eight games from the next board were stopped at the planned checkpoint and remain local. Provider-confirmed incremental spend including the availability check: **$7.731170575**. The $45 key cap was unchanged.
+
+Luna won 15/24 direct spymaster contests and 17/24 direct guesser contests against Haiku (32/48 combined). Haiku-spymaster/Luna-guesser teams won 11/48; reversing those roles won 15/48 against the reference teams. These are provisional AI-partner results with six independent boards, not evidence about human teammates or a controlled comparison against the old prompt strategy.
